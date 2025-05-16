@@ -13,7 +13,7 @@ Pod::Spec.new do |s|
   s.source           = { :git => 'https://github.com/linkrunner-labs/linkrunner-ios.git', :tag => s.version.to_s }
   # --- Source distribution -----------------------------------------------
   s.source_files     = 'Sources/Linkrunner/**/*.{swift}'
-  s.frameworks       = 'Foundation', 'UIKit'
+  s.frameworks       = 'Foundation', 'UIKit', 'Network'
   # --- Swift compiler settings -------------------------------------------
   s.pod_target_xcconfig = { 
     'BUILD_LIBRARY_FOR_DISTRIBUTION' => 'YES',

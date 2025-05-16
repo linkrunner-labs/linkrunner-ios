@@ -12,12 +12,46 @@ import AdSupport
 import AppTrackingTransparency
 #endif
 
+#if canImport(Network)
+import Network
+#endif
+
 @available(iOS 15.0, *)
 public class LinkrunnerSDK: @unchecked Sendable {
+    // Network monitoring properties
+#if canImport(Network)
+    private var networkMonitor: NWPathMonitor?
+    private var currentConnectionType: String?
+#endif
     public static let shared = LinkrunnerSDK()
     
     private var token: String?
     private let baseUrl = "https://api.linkrunner.io"
+    
+#if canImport(Network)
+    private func setupNetworkMonitoring() {
+        networkMonitor = NWPathMonitor()
+        let queue = DispatchQueue(label: "NetworkMonitoring")
+        
+        networkMonitor?.pathUpdateHandler = { [weak self] path in
+            if path.status == .satisfied {
+                if path.usesInterfaceType(.wifi) {
+                    self?.currentConnectionType = "wifi"
+                } else if path.usesInterfaceType(.cellular) {
+                    self?.currentConnectionType = "cellular"
+                } else if path.usesInterfaceType(.wiredEthernet) {
+                    self?.currentConnectionType = "ethernet"
+                } else {
+                    self?.currentConnectionType = "other"
+                }
+            } else {
+                self?.currentConnectionType = "disconnected"
+            }
+        }
+        
+        networkMonitor?.start(queue: queue)
+    }
+#endif
     
     private init() {}
     
@@ -132,7 +166,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Request App Tracking Transparency permission
     /// - Parameter completionHandler: Optional callback with the authorization status
     /// - Returns: The tracking authorization status
-    public func requestTrackingAuthorization(completionHandler: ((ATTrackingManager.AuthorizationStatus) -> Void)? = nil) {
+    public func requestTrackingAuthorization(completionHandler: ((@Sendable (ATTrackingManager.AuthorizationStatus) -> Void)?) = nil) {
+        // Capture the completion handler in a way that's safe across actor boundaries
+        let sendableHandler = completionHandler
+        
         DispatchQueue.main.async {
 #if canImport(AppTrackingTransparency)
             ATTrackingManager.requestTrackingAuthorization { status in
@@ -149,12 +186,22 @@ public class LinkrunnerSDK: @unchecked Sendable {
                 print("Linkrunner: Tracking authorization status: \(statusString)")
                 #endif
                 
-                completionHandler?(status)
+                // Use Task to safely call the handler across isolation boundaries
+                if let handler = sendableHandler {
+                    Task { @MainActor in
+                        handler(status)
+                    }
+                }
             }
 #else
             // Fallback when AppTrackingTransparency is not available
             print("Linkrunner: AppTrackingTransparency not available")
-            completionHandler?(.notDetermined)
+            // Safely call the handler
+            if let handler = sendableHandler {
+                Task { @MainActor in
+                    handler(.notDetermined)
+                }
+            }
 #endif
         }
     }
@@ -378,87 +425,102 @@ public class LinkrunnerSDK: @unchecked Sendable {
 @available(iOS 15.0, *)
 extension LinkrunnerSDK {
     private func deviceData() async -> [String: Any] {
+        // Create a Sendable wrapper using Task isolation to convert to a Sendable result
+        return await Task { () -> [String: Any] in
 #if canImport(UIKit)
-        var data: [String: Any] = [:]
-        
-        // Device info
-        let currentDevice = await UIDevice.current
-        data["device"] = await currentDevice.model
-        data["device_name"] = await currentDevice.name
-        data["system_version"] = await currentDevice.systemVersion
-        data["brand"] = "Apple"
-        data["manufacturer"] = "Apple"
-        
-        // App info
-        let bundle = Bundle.main
-        data["bundle_id"] = bundle.bundleIdentifier
-        data["version"] = bundle.infoDictionary?["CFBundleShortVersionString"]
-        data["build_number"] = bundle.infoDictionary?["CFBundleVersion"]
-        
-        // Network info
-        data["connectivity"] = getNetworkType()
-        
-        // Screen info
-        let screen = await UIScreen.main
-        let screenBounds = await screen.bounds
-        let screenScale = await screen.scale
-        data["device_display"] = [
-            "width": screenBounds.width,
-            "height": screenBounds.height,
-            "scale": screenScale
-        ]
-        
-        // Advertising ID
+            var data: [String: Any] = [:]        
+            // Device info
+            let currentDevice = await UIDevice.current
+            data["device"] = await currentDevice.model
+            data["device_name"] = await currentDevice.name
+            data["system_version"] = await currentDevice.systemVersion
+            data["brand"] = "Apple"
+            data["manufacturer"] = "Apple"
+            
+            // App info
+            let bundle = Bundle.main
+            data["bundle_id"] = bundle.bundleIdentifier
+            data["version"] = bundle.infoDictionary?["CFBundleShortVersionString"]
+            data["build_number"] = bundle.infoDictionary?["CFBundleVersion"]
+            
+            // Network info
+            data["connectivity"] = getNetworkType()
+            
+            // Screen info
+            let screen = await UIScreen.main
+            let screenBounds = await screen.bounds
+            let screenScale = await screen.scale
+            data["device_display"] = [
+                "width": screenBounds.width,
+                "height": screenBounds.height,
+                "scale": screenScale
+            ]
+            
+            // Advertising ID
 #if canImport(AppTrackingTransparency)
-        if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
-            // Create a continuation to make the async SDK call work in our async function
-            await withCheckedContinuation { continuation in
-                DispatchQueue.main.async {
-                    ATTrackingManager.requestTrackingAuthorization { _ in
-                        continuation.resume()
+            if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
+                // Create a continuation to make the async SDK call work in our async function
+                await withCheckedContinuation { continuation in
+                    DispatchQueue.main.async {
+                        ATTrackingManager.requestTrackingAuthorization { _ in
+                            continuation.resume()
+                        }
                     }
                 }
             }
-        }
-        
-        // Check the status after potential request
-        if ATTrackingManager.trackingAuthorizationStatus == .authorized {
+            
+            // Check the status after potential request
+            if ATTrackingManager.trackingAuthorizationStatus == .authorized {
 #if canImport(AdSupport)
-            data["idfa"] = ASIdentifierManager.shared().advertisingIdentifier.uuidString
+                data["idfa"] = ASIdentifierManager.shared().advertisingIdentifier.uuidString
 #endif
-        }
+            }
 #endif
-        
-        // Device ID (for IDFV)
-        let identifierForVendor = await currentDevice.identifierForVendor
-        data["idfv"] = identifierForVendor?.uuidString
-        
-        // Locale info
-        let locale = Locale.current
-        data["locale"] = locale.identifier
-        data["language"] = locale.languageCode
-        data["country"] = locale.regionCode
-        
-        // Timezone
-        let timezone = TimeZone.current
-        data["timezone"] = timezone.identifier
-        data["timezone_offset"] = timezone.secondsFromGMT() / 60
-        
-        // User agent
-        data["user_agent"] = await getUserAgent()
-        
+            
+            // Device ID (for IDFV)
+            let identifierForVendor = await currentDevice.identifierForVendor
+            data["idfv"] = identifierForVendor?.uuidString
+            
+            // Locale info
+            let locale = Locale.current
+            data["locale"] = locale.identifier
+            data["language"] = locale.languageCode
+            data["country"] = locale.regionCode
+            
+            // Timezone
+            let timezone = TimeZone.current
+            data["timezone"] = timezone.identifier
+            data["timezone_offset"] = timezone.secondsFromGMT() / 60
+            
+            // User agent
+            data["user_agent"] = await getUserAgent()
+            
 #else
-        // Fallback for non-UIKit platforms
-        var data: [String: Any] = [:]
-        data["platform"] = "iOS"
+            // Fallback for non-UIKit platforms
+            var data: [String: Any] = [:]
+            data["platform"] = "iOS"
 #endif
-        return data
+            return data
+        }.value
     }
     
     private func getNetworkType() -> String {
-        // This is a simplified version - in a real implementation,
-        // you would use the Network framework or Reachability to check
+#if canImport(Network)
+        // Using a static property to keep track of the network type
+        // This helps avoid creating a new monitor for each call
+        if networkMonitor == nil {
+            setupNetworkMonitoring()
+        }
+        
+        guard let connectionType = currentConnectionType else {
+            return "unknown"
+        }
+        
+        return connectionType
+#else
+        // Fallback for platforms where Network framework is not available
         return "unknown"
+#endif
     }
     
     private func getUserAgent() async -> String {
