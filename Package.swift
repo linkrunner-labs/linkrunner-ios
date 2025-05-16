@@ -1,24 +1,50 @@
-// swift-tools-version: 6.0
-// The swift-tools-version declares the minimum version of Swift required to build this package.
-
+// swift-tools-version:5.9
 import PackageDescription
 
 let package = Package(
-    name: "LinkrunneriOSPackage",
+    name: "Linkrunner",
+    defaultLocalization: "en",
+    platforms: [.iOS(.v15)],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
+        // Default library - SPM will choose appropriate linkage based on client needs
         .library(
-            name: "LinkrunneriOSPackage",
-            targets: ["LinkrunneriOSPackage"]),
-    ],
-    targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
-        .target(
-            name: "LinkrunneriOSPackage"),
-        .testTarget(
-            name: "LinkrunneriOSPackageTests",
-            dependencies: ["LinkrunneriOSPackage"]
+            name: "Linkrunner",
+            targets: ["Linkrunner"]
         ),
-    ]
+        // Static library for when static linking is explicitly required
+        .library(
+            name: "LinkrunnerStatic",
+            type: .static,
+            targets: ["Linkrunner"]
+        ),
+        // Dynamic library for when dynamic linking is explicitly required
+        .library(
+            name: "LinkrunnerDynamic",
+            type: .dynamic,
+            targets: ["Linkrunner"]
+        )
+    ],
+    dependencies: [],
+    targets: [
+        .target(
+            name: "Linkrunner",
+            dependencies: [],
+            path: "Sources/Linkrunner",
+            cSettings: [
+                .define("SWIFT_PACKAGE")
+            ],
+            swiftSettings: [
+                .define("LINKRUNNER_SPM"),
+                // Enable library evolution for better binary compatibility
+                .unsafeFlags(["-enable-library-evolution"]),
+                // This is important for binary frameworks to maintain ABI stability
+                .enableUpcomingFeature("BareSlashRegexLiterals")
+            ]
+        ),
+        .testTarget(
+            name: "LinkrunnerTests",
+            dependencies: ["Linkrunner"]
+        )
+    ],
+    swiftLanguageVersions: [.v5]
 )
