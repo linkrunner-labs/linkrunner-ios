@@ -382,9 +382,10 @@ extension LinkrunnerSDK {
         var data: [String: Any] = [:]
         
         // Device info
-        data["device"] = await (await UIDevice.current).model
-        data["device_name"] = await (await UIDevice.current).name
-        data["system_version"] = await (await UIDevice.current).systemVersion
+        let currentDevice = await UIDevice.current
+        data["device"] = await currentDevice.model
+        data["device_name"] = await currentDevice.name
+        data["system_version"] = await currentDevice.systemVersion
         data["brand"] = "Apple"
         data["manufacturer"] = "Apple"
         
@@ -399,10 +400,12 @@ extension LinkrunnerSDK {
         
         // Screen info
         let screen = await UIScreen.main
-        data["device_display"] = await [
-            "width": await screen.bounds.width,
-            "height": await screen.bounds.height,
-            "scale": await screen.scale
+        let screenBounds = await screen.bounds
+        let screenScale = await screen.scale
+        data["device_display"] = [
+            "width": screenBounds.width,
+            "height": screenBounds.height,
+            "scale": screenScale
         ]
         
         // Advertising ID
@@ -427,7 +430,8 @@ extension LinkrunnerSDK {
 #endif
         
         // Device ID (for IDFV)
-        data["idfv"] = await (await UIDevice.current).identifierForVendor?.uuidString
+        let identifierForVendor = await currentDevice.identifierForVendor
+        data["idfv"] = identifierForVendor?.uuidString
         
         // Locale info
         let locale = Locale.current
@@ -463,8 +467,10 @@ extension LinkrunnerSDK {
         let appInfo = Bundle.main.infoDictionary
         let appVersion = appInfo?["CFBundleShortVersionString"] as? String ?? "Unknown"
         let buildNumber = appInfo?["CFBundleVersion"] as? String ?? "Unknown"
+        let deviceModel = await device.model
+        let systemVersion = await device.systemVersion
         
-        return "Linkrunner-iOS/\(appVersion) (\(await (await device).model); iOS \(await (await device).systemVersion); Build/\(buildNumber))"
+        return "Linkrunner-iOS/\(appVersion) (\(deviceModel); iOS \(systemVersion); Build/\(buildNumber))"
 #else
         return "Linkrunner-iOS/Unknown"
 #endif
