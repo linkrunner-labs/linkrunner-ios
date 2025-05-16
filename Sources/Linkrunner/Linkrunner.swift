@@ -382,9 +382,9 @@ extension LinkrunnerSDK {
         var data: [String: Any] = [:]
         
         // Device info
-        data["device"] = UIDevice.current.model
-        data["device_name"] = UIDevice.current.name
-        data["system_version"] = UIDevice.current.systemVersion
+        data["device"] = await UIDevice.current.model
+        data["device_name"] = await UIDevice.current.name
+        data["system_version"] = await UIDevice.current.systemVersion
         data["brand"] = "Apple"
         data["manufacturer"] = "Apple"
         
@@ -398,8 +398,8 @@ extension LinkrunnerSDK {
         data["connectivity"] = getNetworkType()
         
         // Screen info
-        let screen = UIScreen.main
-        data["device_display"] = [
+        let screen = await UIScreen.main
+        data["device_display"] = await [
             "width": screen.bounds.width,
             "height": screen.bounds.height,
             "scale": screen.scale
@@ -427,7 +427,7 @@ extension LinkrunnerSDK {
 #endif
         
         // Device ID (for IDFV)
-        data["idfv"] = UIDevice.current.identifierForVendor?.uuidString
+        data["idfv"] = await UIDevice.current.identifierForVendor?.uuidString
         
         // Locale info
         let locale = Locale.current
@@ -459,12 +459,12 @@ extension LinkrunnerSDK {
     
     private func getUserAgent() async -> String {
 #if canImport(UIKit)
-        let device = UIDevice.current
+        let device = await UIDevice.current
         let appInfo = Bundle.main.infoDictionary
         let appVersion = appInfo?["CFBundleShortVersionString"] as? String ?? "Unknown"
         let buildNumber = appInfo?["CFBundleVersion"] as? String ?? "Unknown"
         
-        return "Linkrunner-iOS/\(appVersion) (\(device.model); iOS \(device.systemVersion); Build/\(buildNumber))"
+        return "Linkrunner-iOS/\(appVersion) (\(await device.model); iOS \(await device.systemVersion); Build/\(buildNumber))"
 #else
         return "Linkrunner-iOS/Unknown"
 #endif

@@ -10,7 +10,7 @@ Pod::Spec.new do |s|
   s.author           = { 'Linkrunner' => 'darshil@linkrunner.io' }
   s.platform         = :ios, '15.0'
   s.swift_version    = '5.9'
-  s.source           = { :git => 'https://github.com/linkrunner-labs/linkrunner-ios.git', :branch => 'main' }
+  s.source           = { :git => 'https://github.com/linkrunner-labs/linkrunner-ios.git', :tag => s.version.to_s }
   # --- Source distribution -----------------------------------------------
   s.source_files     = 'Sources/Linkrunner/**/*.{swift}'
   s.frameworks       = 'Foundation', 'UIKit'
