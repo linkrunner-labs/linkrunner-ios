@@ -94,6 +94,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
         let queue = DispatchQueue(label: "NetworkMonitoring")
         
         networkMonitor?.pathUpdateHandler = { [weak self] path in
+            // Don't try to access connection details immediately
+            // Instead, just capture the status safely
             if path.status == .satisfied {
                 if path.usesInterfaceType(.wifi) {
                     self?.currentConnectionType = "wifi"
@@ -109,11 +111,18 @@ public class LinkrunnerSDK: @unchecked Sendable {
             }
         }
         
+        // Initialize the connection type to something reasonable before starting the monitor
+        self.currentConnectionType = "unknown"
+        
         networkMonitor?.start(queue: queue)
     }
 #endif
     
-    private init() {}
+    private init() {
+#if canImport(Network)
+        setupNetworkMonitoring()
+#endif
+    }
     
     // MARK: - Public Methods
     
@@ -609,6 +618,8 @@ extension LinkrunnerSDK {
         // This helps avoid creating a new monitor for each call
         if networkMonitor == nil {
             setupNetworkMonitoring()
+            // Return "unknown" immediately after setup to avoid race condition
+            return "unknown"
         }
         
         guard let connectionType = currentConnectionType else {
