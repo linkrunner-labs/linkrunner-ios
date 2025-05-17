@@ -42,7 +42,7 @@ extension SendableDictionary: @unchecked Sendable {}
 
 // MARK: - Model Types
 
-public struct LRIPLocationData: Codable {
+public struct LRIPLocationData: Codable, Sendable {
     public let ip: String
     public let city: String
     public let countryLong: String
@@ -53,6 +53,19 @@ public struct LRIPLocationData: Codable {
     public let timeZone: String
     public let zipCode: String
     
+    enum CodingKeys: String, CodingKey {
+        case ip
+        case city
+        case countryLong = "country_long"
+        case countryShort = "country_short"
+        case latitude
+        case longitude
+        case region
+        case timeZone = "time_zone"
+        case zipCode = "zip_code"
+    }
+    
+    // Legacy dictionary initializer for backward compatibility
     init(dictionary: SendableDictionary) throws {
         guard let ip = dictionary["ip"] as? String,
               let city = dictionary["city"] as? String,
@@ -113,13 +126,23 @@ public struct UserData: Sendable {
 public struct CampaignData: Codable, Sendable {
     public let id: String
     public let name: String
-    public let type: String // "ORGANIC" or "INORGANIC"
-    public let adNetwork: String? // "META" or "GOOGLE" or null
+    public let type: CampaignType
+    public let adNetwork: AdNetwork?
     public let groupName: String?
     public let assetGroupName: String?
     public let assetName: String?
     public let installedAt: Date?
     public let storeClickAt: Date?
+    
+    public enum CampaignType: String, Codable, Sendable {
+        case organic = "ORGANIC"
+        case inorganic = "INORGANIC"
+    }
+    
+    public enum AdNetwork: String, Codable, Sendable {
+        case meta = "META"
+        case google = "GOOGLE"
+    }
     
     enum CodingKeys: String, CodingKey {
         case id, name, type
@@ -163,13 +186,41 @@ public struct CampaignData: Codable, Sendable {
     }
 }
 
-public struct LRInitResponse: Sendable {
+public struct LRInitResponse: Codable, Sendable {
     public let attributionSource: String
     public let campaignData: CampaignData?
     public let deeplink: String?
     public let ipLocationData: LRIPLocationData
-    public let rootDomain: Int
+    public let rootDomain: Bool
     
+    enum CodingKeys: String, CodingKey {
+        case attributionSource = "attribution_source"
+        case campaignData = "campaign_data"
+        case deeplink
+        case ipLocationData = "ip_location_data"
+        case rootDomain = "root_domain"
+    }
+    
+    // Custom decoder to handle Bool/Int conversion for rootDomain
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        attributionSource = try container.decodeIfPresent(String.self, forKey: .attributionSource) ?? "UNKNOWN"
+        campaignData = try container.decodeIfPresent(CampaignData.self, forKey: .campaignData)
+        deeplink = try container.decodeIfPresent(String.self, forKey: .deeplink)
+        ipLocationData = try container.decode(LRIPLocationData.self, forKey: .ipLocationData)
+        
+        // Handle Boolean or Integer 0/1 representation
+        if let boolValue = try? container.decode(Bool.self, forKey: .rootDomain) {
+            rootDomain = boolValue
+        } else if let intValue = try? container.decode(Int.self, forKey: .rootDomain) {
+            rootDomain = intValue != 0
+        } else {
+            rootDomain = false
+        }
+    }
+    
+    // Legacy dictionary initializer for backward compatibility
     init(dictionary: SendableDictionary) throws {
         guard let ipLocationDataDict = dictionary["ip_location_data"] as? SendableDictionary else {
             throw LinkrunnerError.invalidResponse
@@ -193,25 +244,55 @@ public struct LRInitResponse: Sendable {
         
         self.ipLocationData = try LRIPLocationData(dictionary: ipLocationDataDict)
         
-        // root_domain can be 0 (Int) instead of a Bool
+        // Convert rootDomain to Bool
         if let rootDomain = dictionary["root_domain"] as? Int {
-            self.rootDomain = rootDomain
+            self.rootDomain = rootDomain != 0
         } else if let rootDomain = dictionary["root_domain"] as? Bool {
-            self.rootDomain = rootDomain ? 1 : 0
+            self.rootDomain = rootDomain
         } else {
-            self.rootDomain = 0
+            self.rootDomain = false
         }
     }
 }
 
-public struct LRTriggerResponse: Sendable {
+public struct LRTriggerResponse: Codable, Sendable {
     public let ipLocationData: LRIPLocationData
     public let deeplink: String?
-    public let rootDomain: Int
+    public let rootDomain: Bool
     public let trigger: Bool?
     public let campaignData: CampaignData?
     public let attributionSource: String
     
+    enum CodingKeys: String, CodingKey {
+        case ipLocationData = "ip_location_data"
+        case deeplink
+        case rootDomain = "root_domain"
+        case trigger
+        case campaignData = "campaign_data"
+        case attributionSource = "attribution_source"
+    }
+    
+    // Custom decoder to handle Bool/Int conversion for rootDomain
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        ipLocationData = try container.decode(LRIPLocationData.self, forKey: .ipLocationData)
+        deeplink = try container.decodeIfPresent(String.self, forKey: .deeplink)
+        attributionSource = try container.decodeIfPresent(String.self, forKey: .attributionSource) ?? "UNKNOWN"
+        trigger = try container.decodeIfPresent(Bool.self, forKey: .trigger)
+        campaignData = try container.decodeIfPresent(CampaignData.self, forKey: .campaignData)
+        
+        // Handle Boolean or Integer 0/1 representation
+        if let boolValue = try? container.decode(Bool.self, forKey: .rootDomain) {
+            rootDomain = boolValue
+        } else if let intValue = try? container.decode(Int.self, forKey: .rootDomain) {
+            rootDomain = intValue != 0
+        } else {
+            rootDomain = false
+        }
+    }
+    
+    // Legacy dictionary initializer for backward compatibility
     init(dictionary: SendableDictionary) throws {
         guard let ipLocationDataDict = dictionary["ip_location_data"] as? SendableDictionary else {
             throw LinkrunnerError.invalidResponse
@@ -229,13 +310,13 @@ public struct LRTriggerResponse: Sendable {
         // Handle attribution_source
         self.attributionSource = dictionary["attribution_source"] as? String ?? "UNKNOWN"
         
-        // Handle root_domain (can be Int or Bool)
+        // Convert rootDomain to Bool
         if let rootDomain = dictionary["root_domain"] as? Int {
-            self.rootDomain = rootDomain
+            self.rootDomain = rootDomain != 0
         } else if let rootDomain = dictionary["root_domain"] as? Bool {
-            self.rootDomain = rootDomain ? 1 : 0
+            self.rootDomain = rootDomain
         } else {
-            self.rootDomain = 0
+            self.rootDomain = false
         }
         
         // Handle trigger flag
@@ -266,4 +347,32 @@ public enum PaymentStatus: String, Sendable {
     case completed = "PAYMENT_COMPLETED"
     case failed = "PAYMENT_FAILED"
     case cancelled = "PAYMENT_CANCELLED"
+}
+
+// MARK: - API Response Models
+
+/// Response model for capture-payment endpoint
+public struct CapturePaymentResponse: Codable, Sendable {
+    public let success: Bool
+    public let message: String
+    public let data: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case success
+        case message
+        case data
+    }
+}
+
+/// Response model for capture-event endpoint
+public struct CaptureEventResponse: Codable, Sendable {
+    public let success: Bool
+    public let message: String
+    public let data: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case success
+        case message
+        case data
+    }
 }
