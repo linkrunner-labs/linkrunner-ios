@@ -35,8 +35,6 @@ let package = Package(
             ],
             swiftSettings: [
                 .define("LINKRUNNER_SPM"),
-                // Enable library evolution for better binary compatibility
-                .unsafeFlags(["-enable-library-evolution"]),
                 // This is important for binary frameworks to maintain ABI stability
                 .enableUpcomingFeature("BareSlashRegexLiterals")
             ]

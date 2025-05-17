@@ -17,6 +17,6 @@ Pod::Spec.new do |s|
   # --- Swift compiler settings -------------------------------------------
   s.pod_target_xcconfig = { 
     'BUILD_LIBRARY_FOR_DISTRIBUTION' => 'YES',
-    'OTHER_SWIFT_FLAGS' => '-strict-concurrency=complete' 
+    'OTHER_SWIFT_FLAGS' => '-strict-concurrency=complete -enable-actor-data-race-checks -enable-upcoming-feature Sendable'
   }
 end

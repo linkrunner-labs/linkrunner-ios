@@ -36,6 +36,10 @@ extension LinkrunnerError: LocalizedError {
     }
 }
 
+// Sendable dictionary type alias
+public typealias SendableDictionary = [String: Any] 
+extension SendableDictionary: @unchecked Sendable {}
+
 // MARK: - Model Types
 
 public struct LRIPLocationData: Codable {
@@ -49,7 +53,7 @@ public struct LRIPLocationData: Codable {
     public let timeZone: String
     public let zipCode: String
     
-    init(dictionary: [String: Any]) throws {
+    init(dictionary: SendableDictionary) throws {
         guard let ip = dictionary["ip"] as? String,
               let city = dictionary["city"] as? String,
               let countryLong = dictionary["countryLong"] as? String,
@@ -74,7 +78,7 @@ public struct LRIPLocationData: Codable {
     }
 }
 
-public struct UserData {
+public struct UserData: Sendable {
     public let id: String
     public let name: String?
     public let phone: String?
@@ -87,8 +91,8 @@ public struct UserData {
         self.email = email
     }
     
-    var dictionary: [String: Any] {
-        var dict: [String: Any] = ["id": id]
+    var dictionary: SendableDictionary {
+        var dict: SendableDictionary = ["id": id]
         
         if let name = name {
             dict["name"] = name
@@ -106,7 +110,7 @@ public struct UserData {
     }
 }
 
-public struct CampaignData: Codable {
+public struct CampaignData: Codable, Sendable {
     public let id: String
     public let name: String
     public let type: String // "ORGANIC" or "INORGANIC"
@@ -127,7 +131,7 @@ public struct CampaignData: Codable {
         case storeClickAt = "store_click_at"
     }
     
-    init(dictionary: [String: Any]) throws {
+    init(dictionary: SendableDictionary) throws {
         guard let id = dictionary["id"] as? String,
               let name = dictionary["name"] as? String,
               let type = dictionary["type"] as? String else {
@@ -159,22 +163,22 @@ public struct CampaignData: Codable {
     }
 }
 
-public struct LRInitResponse {
+public struct LRInitResponse: Sendable {
     public let attributionSource: String
     public let campaignData: CampaignData?
     public let deeplink: String?
     public let ipLocationData: LRIPLocationData
     public let rootDomain: Int
     
-    init(dictionary: [String: Any]) throws {
-        guard let ipLocationDataDict = dictionary["ip_location_data"] as? [String: Any] else {
+    init(dictionary: SendableDictionary) throws {
+        guard let ipLocationDataDict = dictionary["ip_location_data"] as? SendableDictionary else {
             throw LinkrunnerError.invalidResponse
         }
         
         self.attributionSource = dictionary["attribution_source"] as? String ?? "UNKNOWN"
         
         // Handle campaign_data - can be null
-        if let campaignDataDict = dictionary["campaign_data"] as? [String: Any] {
+        if let campaignDataDict = dictionary["campaign_data"] as? SendableDictionary {
             self.campaignData = try CampaignData(dictionary: campaignDataDict)
         } else {
             self.campaignData = nil
@@ -200,7 +204,7 @@ public struct LRInitResponse {
     }
 }
 
-public struct LRTriggerResponse {
+public struct LRTriggerResponse: Sendable {
     public let ipLocationData: LRIPLocationData
     public let deeplink: String?
     public let rootDomain: Int
@@ -208,8 +212,8 @@ public struct LRTriggerResponse {
     public let campaignData: CampaignData?
     public let attributionSource: String
     
-    init(dictionary: [String: Any]) throws {
-        guard let ipLocationDataDict = dictionary["ip_location_data"] as? [String: Any] else {
+    init(dictionary: SendableDictionary) throws {
+        guard let ipLocationDataDict = dictionary["ip_location_data"] as? SendableDictionary else {
             throw LinkrunnerError.invalidResponse
         }
         
@@ -238,7 +242,7 @@ public struct LRTriggerResponse {
         self.trigger = dictionary["trigger"] as? Bool
         
         // Handle campaign_data - can be null
-        if let campaignDataDict = dictionary["campaign_data"] as? [String: Any] {
+        if let campaignDataDict = dictionary["campaign_data"] as? SendableDictionary {
             self.campaignData = try CampaignData(dictionary: campaignDataDict)
         } else {
             self.campaignData = nil
@@ -246,7 +250,7 @@ public struct LRTriggerResponse {
     }
 }
 
-public enum PaymentType: String {
+public enum PaymentType: String, Sendable {
     case firstPayment = "FIRST_PAYMENT"
     case walletTopup = "WALLET_TOPUP"
     case fundsWithdrawal = "FUNDS_WITHDRAWAL"
@@ -257,7 +261,7 @@ public enum PaymentType: String {
     case `default` = "DEFAULT"
 }
 
-public enum PaymentStatus: String {
+public enum PaymentStatus: String, Sendable {
     case initiated = "PAYMENT_INITIATED"
     case completed = "PAYMENT_COMPLETED"
     case failed = "PAYMENT_FAILED"

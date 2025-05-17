@@ -18,6 +18,66 @@ import Network
 
 @available(iOS 15.0, *)
 public class LinkrunnerSDK: @unchecked Sendable {
+    // Define a Sendable device data structure
+    private struct DeviceData: Sendable {
+        var device: String
+        var deviceName: String
+        var systemVersion: String
+        var brand: String
+        var manufacturer: String
+        var bundleId: String?
+        var appVersion: String?
+        var buildNumber: String?
+        var connectivity: String
+        var deviceDisplay: DisplayData
+        var idfa: String?
+        var idfv: String?
+        var locale: String?
+        var language: String?
+        var country: String?
+        var timezone: String?
+        var timezoneOffset: Int?
+        var userAgent: String?
+        var installInstanceId: String
+        
+        struct DisplayData: Sendable {
+            var width: Double
+            var height: Double
+            var scale: Double
+        }
+        
+        // Convert to dictionary for network requests
+        func toDictionary() -> SendableDictionary {
+            var dict: SendableDictionary = [
+                "device": device,
+                "device_name": deviceName,
+                "system_version": systemVersion,
+                "brand": brand,
+                "manufacturer": manufacturer,
+                "connectivity": connectivity,
+                "device_display": [
+                    "width": deviceDisplay.width,
+                    "height": deviceDisplay.height,
+                    "scale": deviceDisplay.scale
+                ] as [String: Any],
+                "install_instance_id": installInstanceId
+            ]
+            
+            if let bundleId = bundleId { dict["bundle_id"] = bundleId }
+            if let appVersion = appVersion { dict["version"] = appVersion }
+            if let buildNumber = buildNumber { dict["build_number"] = buildNumber }
+            if let idfa = idfa { dict["idfa"] = idfa }
+            if let idfv = idfv { dict["idfv"] = idfv }
+            if let locale = locale { dict["locale"] = locale }
+            if let language = language { dict["language"] = language }
+            if let country = country { dict["country"] = country }
+            if let timezone = timezone { dict["timezone"] = timezone }
+            if let timezoneOffset = timezoneOffset { dict["timezone_offset"] = timezoneOffset }
+            if let userAgent = userAgent { dict["user_agent"] = userAgent }
+            
+            return dict
+        }
+    }
     // Network monitoring properties
 #if canImport(Network)
     private var networkMonitor: NWPathMonitor?
@@ -72,20 +132,20 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// - Parameter additionalData: Any additional data to include
     /// - Returns: The trigger response
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func signup(userData: UserData, additionalData: [String: Any]? = nil) async throws -> LRTriggerResponse {
+    public func signup(userData: UserData, additionalData: SendableDictionary? = nil) async throws -> LRTriggerResponse {
         guard let token = self.token else {
             throw LinkrunnerError.notInitialized
         }
         
-        var requestData: [String: Any] = [
+        var requestData: SendableDictionary = [
             "token": token,
             "user_data": userData.dictionary,
             "platform": "IOS",
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
         
-        var dataDict: [String: Any] = additionalData ?? [:]
-        dataDict["device_data"] = await deviceData()
+        var dataDict: SendableDictionary = additionalData ?? [:]
+        dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
         
         let response = try await makeRequest(
@@ -97,7 +157,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         print("Linkrunner: Signup called ")
         #endif
         
-        if let data = response["data"] as? [String: Any] {
+        if let data = response["data"] as? SendableDictionary {
             return try LRTriggerResponse(dictionary: data)
         } else {
             throw LinkrunnerError.invalidResponse
@@ -112,10 +172,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.notInitialized
         }
         
-        let requestData: [String: Any] = [
+        let requestData: SendableDictionary = [
             "token": token,
             "user_data": userData.dictionary,
-            "device_data": await deviceData(),
+            "device_data": (await deviceData()).toDictionary(),
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
         
@@ -143,7 +203,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
                         do {
                             let _ = try await self.makeRequest(
                                 endpoint: "/api/client/deeplink-triggered",
-                                body: ["token": token]
+                                body: ["token": token] as SendableDictionary
                             )
                             
                             #if DEBUG
@@ -165,11 +225,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     /// Request App Tracking Transparency permission
     /// - Parameter completionHandler: Optional callback with the authorization status
-    /// - Returns: The tracking authorization status
-    public func requestTrackingAuthorization(completionHandler: ((@Sendable (ATTrackingManager.AuthorizationStatus) -> Void)?) = nil) {
-        // Capture the completion handler in a way that's safe across actor boundaries
-        let sendableHandler = completionHandler
-        
+    public func requestTrackingAuthorization(completionHandler: (@Sendable (ATTrackingManager.AuthorizationStatus) -> Void)? = nil) {
         DispatchQueue.main.async {
 #if canImport(AppTrackingTransparency)
             ATTrackingManager.requestTrackingAuthorization { status in
@@ -187,19 +243,18 @@ public class LinkrunnerSDK: @unchecked Sendable {
                 #endif
                 
                 // Use Task to safely call the handler across isolation boundaries
-                if let handler = sendableHandler {
+                if let completionHandler = completionHandler {
                     Task { @MainActor in
-                        handler(status)
+                        completionHandler(status)
                     }
                 }
             }
 #else
             // Fallback when AppTrackingTransparency is not available
             print("Linkrunner: AppTrackingTransparency not available")
-            // Safely call the handler
-            if let handler = sendableHandler {
+            if let completionHandler = completionHandler {
                 Task { @MainActor in
-                    handler(.notDetermined)
+                    completionHandler(.notDetermined)
                 }
             }
 #endif
@@ -211,7 +266,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     ///   - eventName: Name of the event
     ///   - eventData: Optional event data
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func trackEvent(eventName: String, eventData: [String: Any]? = nil) async throws {
+    public func trackEvent(eventName: String, eventData: SendableDictionary? = nil) async throws {
         guard let token = self.token else {
             throw LinkrunnerError.notInitialized
         }
@@ -220,11 +275,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.invalidParameters("Event name is required")
         }
         
-        let requestData: [String: Any] = [
+        let requestData: SendableDictionary = [
             "token": token,
             "event_name": eventName,
             "event_data": eventData as Any,
-            "device_data": await deviceData(),
+            "device_data": (await deviceData()).toDictionary(),
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
         
@@ -257,7 +312,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.notInitialized
         }
         
-        var requestData: [String: Any] = [
+        var requestData: SendableDictionary = [
             "token": token,
             "user_id": userId,
             "platform": "IOS",
@@ -272,8 +327,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
         requestData["type"] = type.rawValue
         requestData["status"] = status.rawValue
         
-        var dataDict: [String: Any] = [:]
-        dataDict["device_data"] = await deviceData()
+        var dataDict: SendableDictionary = [:]
+        dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
         
         _ = try await makeRequest(
@@ -288,7 +343,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "userId": userId,
             "type": type.rawValue,
             "status": status.rawValue
-        ])
+        ] as [String: Any])
         #endif
     }
     
@@ -306,7 +361,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.invalidParameters("Either paymentId or userId must be provided")
         }
         
-        var requestData: [String: Any] = [
+        var requestData: SendableDictionary = [
             "token": token,
             "user_id": userId,
             "platform": "IOS",
@@ -317,8 +372,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
             requestData["payment_id"] = paymentId
         }
         
-        var dataDict: [String: Any] = [:]
-        dataDict["device_data"] = await deviceData()
+        var dataDict: SendableDictionary = [:]
+        dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
         
         _ = try await makeRequest(
@@ -330,7 +385,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         print("Linkrunner: Payment entry removed successfully!", [
             "paymentId": paymentId ?? "N/A",
             "userId": userId
-        ])
+        ] as [String: Any])
         #endif
     }
     
@@ -338,10 +393,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     private func initApiCall(token: String, source: String, link: String? = nil) async throws -> LRInitResponse {
-        let deviceDataDict = await deviceData()
+        let deviceDataDict = (await deviceData()).toDictionary()
         let installInstanceId = await getLinkRunnerInstallInstanceId()
         
-        var requestData: [String: Any] = [
+        var requestData: SendableDictionary = [
             "token": token,
             "package_version": getPackageVersion(),
             "app_version": getAppVersion(),
@@ -365,12 +420,12 @@ public class LinkrunnerSDK: @unchecked Sendable {
         print("init response > ", response)
         #endif
         
-        if let data = response["data"] as? [String: Any],
+        if let data = response["data"] as? SendableDictionary,
            let deeplink = data["deeplink"] as? String {
             await setDeeplinkURL(deeplink)
         }
         
-        if let data = response["data"] as? [String: Any] {
+        if let data = response["data"] as? SendableDictionary {
             return try LRInitResponse(dictionary: data)
         } else {
             throw LinkrunnerError.invalidResponse
@@ -378,7 +433,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    private func makeRequest(endpoint: String, body: [String: Any]) async throws -> [String: Any] {
+    private func makeRequest(endpoint: String, body: SendableDictionary) async throws -> SendableDictionary {
         guard let url = URL(string: baseUrl + endpoint) else {
             throw LinkrunnerError.invalidUrl
         }
@@ -408,7 +463,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.jsonDecodingFailed
         }
         
-        return json
+        // Convert to SendableDictionary to ensure sendable compliance
+        let sendableJson = json as SendableDictionary
+        return sendableJson
     }
     
     private func getPackageVersion() -> String {
@@ -424,37 +481,37 @@ public class LinkrunnerSDK: @unchecked Sendable {
 
 @available(iOS 15.0, *)
 extension LinkrunnerSDK {
-    private func deviceData() async -> [String: Any] {
+    private func deviceData() async -> DeviceData {
         // Create a Sendable wrapper using Task isolation to convert to a Sendable result
-        return await Task { () -> [String: Any] in
+        return await Task { () -> DeviceData in
 #if canImport(UIKit)
-            var data: [String: Any] = [:]        
             // Device info
             let currentDevice = await UIDevice.current
-            data["device"] = await currentDevice.model
-            data["device_name"] = await currentDevice.name
-            data["system_version"] = await currentDevice.systemVersion
-            data["brand"] = "Apple"
-            data["manufacturer"] = "Apple"
+            let deviceModel = await currentDevice.model
+            let deviceName = await currentDevice.name
+            let systemVersion = await currentDevice.systemVersion
             
             // App info
             let bundle = Bundle.main
-            data["bundle_id"] = bundle.bundleIdentifier
-            data["version"] = bundle.infoDictionary?["CFBundleShortVersionString"]
-            data["build_number"] = bundle.infoDictionary?["CFBundleVersion"]
+            let bundleId = bundle.bundleIdentifier
+            let appVersion = bundle.infoDictionary?["CFBundleShortVersionString"] as? String
+            let buildNumber = bundle.infoDictionary?["CFBundleVersion"] as? String
             
             // Network info
-            data["connectivity"] = getNetworkType()
+            let connectivity = getNetworkType()
             
             // Screen info
             let screen = await UIScreen.main
             let screenBounds = await screen.bounds
             let screenScale = await screen.scale
-            data["device_display"] = [
-                "width": screenBounds.width,
-                "height": screenBounds.height,
-                "scale": screenScale
-            ]
+            let displayData = DeviceData.DisplayData(
+                width: screenBounds.width,
+                height: screenBounds.height,
+                scale: screenScale
+            )
+            
+            // Variable for IDFA
+            var idfa: String? = nil
             
             // Advertising ID
 #if canImport(AppTrackingTransparency)
@@ -472,35 +529,77 @@ extension LinkrunnerSDK {
             // Check the status after potential request
             if ATTrackingManager.trackingAuthorizationStatus == .authorized {
 #if canImport(AdSupport)
-                data["idfa"] = ASIdentifierManager.shared().advertisingIdentifier.uuidString
+                idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
 #endif
             }
 #endif
             
             // Device ID (for IDFV)
             let identifierForVendor = await currentDevice.identifierForVendor
-            data["idfv"] = identifierForVendor?.uuidString
+            let idfv = identifierForVendor?.uuidString
             
             // Locale info
             let locale = Locale.current
-            data["locale"] = locale.identifier
-            data["language"] = locale.languageCode
-            data["country"] = locale.regionCode
+            let localeIdentifier = locale.identifier
+            let languageCode = locale.languageCode
+            let regionCode = locale.regionCode
             
             // Timezone
             let timezone = TimeZone.current
-            data["timezone"] = timezone.identifier
-            data["timezone_offset"] = timezone.secondsFromGMT() / 60
+            let timezoneIdentifier = timezone.identifier
+            let timezoneOffset = timezone.secondsFromGMT() / 60
             
             // User agent
-            data["user_agent"] = await getUserAgent()
+            let userAgent = await getUserAgent()
             
+            // Install instance ID
+            let installInstanceId = await getLinkRunnerInstallInstanceId()
+            
+            return DeviceData(
+                device: deviceModel,
+                deviceName: deviceName,
+                systemVersion: systemVersion,
+                brand: "Apple",
+                manufacturer: "Apple",
+                bundleId: bundleId,
+                appVersion: appVersion,
+                buildNumber: buildNumber,
+                connectivity: connectivity,
+                deviceDisplay: displayData,
+                idfa: idfa,
+                idfv: idfv,
+                locale: localeIdentifier,
+                language: languageCode,
+                country: regionCode,
+                timezone: timezoneIdentifier,
+                timezoneOffset: timezoneOffset,
+                userAgent: userAgent,
+                installInstanceId: installInstanceId
+            )
 #else
             // Fallback for non-UIKit platforms
-            var data: [String: Any] = [:]
-            data["platform"] = "iOS"
+            return DeviceData(
+                device: "Unknown",
+                deviceName: "Unknown",
+                systemVersion: "Unknown",
+                brand: "Apple",
+                manufacturer: "Apple",
+                bundleId: nil,
+                appVersion: nil,
+                buildNumber: nil,
+                connectivity: "unknown",
+                deviceDisplay: DeviceData.DisplayData(width: 0, height: 0, scale: 1),
+                idfa: nil,
+                idfv: nil,
+                locale: nil,
+                language: nil,
+                country: nil,
+                timezone: nil,
+                timezoneOffset: nil,
+                userAgent: nil,
+                installInstanceId: await getLinkRunnerInstallInstanceId()
+            )
 #endif
-            return data
         }.value
     }
     
