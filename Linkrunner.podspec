@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'Linkrunner'
-  s.version          = '1.0.3'
+  s.version          = '1.0.5'
   s.summary          = 'AI‑powered Mobile Measurement SDK.'
   s.description      = <<-DESC
     Native Swift SDK for Linkrunner.io—attribution, event & payment tracking.

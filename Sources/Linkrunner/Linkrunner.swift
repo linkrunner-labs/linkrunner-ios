@@ -93,26 +93,32 @@ public class LinkrunnerSDK: @unchecked Sendable {
         networkMonitor = NWPathMonitor()
         let queue = DispatchQueue(label: "NetworkMonitoring")
         
+        // Initialize the connection type before starting the monitor
+        self.currentConnectionType = "unknown"
+        
         networkMonitor?.pathUpdateHandler = { [weak self] path in
-            // Don't try to access connection details immediately
-            // Instead, just capture the status safely
+            // Only check interface type when status is satisfied to avoid warnings
             if path.status == .satisfied {
+                // Use a local variable to determine the connection type
+                let connectionType: String
+                
+                // Simply check the interface type without accessing endpoints
                 if path.usesInterfaceType(.wifi) {
-                    self?.currentConnectionType = "wifi"
+                    connectionType = "wifi"
                 } else if path.usesInterfaceType(.cellular) {
-                    self?.currentConnectionType = "cellular"
+                    connectionType = "cellular"
                 } else if path.usesInterfaceType(.wiredEthernet) {
-                    self?.currentConnectionType = "ethernet"
+                    connectionType = "ethernet"
                 } else {
-                    self?.currentConnectionType = "other"
+                    connectionType = "other"
                 }
+                
+                // Update the connection type on the main object
+                self?.currentConnectionType = connectionType
             } else {
                 self?.currentConnectionType = "disconnected"
             }
         }
-        
-        // Initialize the connection type to something reasonable before starting the monitor
-        self.currentConnectionType = "unknown"
         
         networkMonitor?.start(queue: queue)
     }
@@ -622,10 +628,8 @@ extension LinkrunnerSDK {
             return "unknown"
         }
         
-        guard let connectionType = currentConnectionType else {
-            return "unknown"
-        }
-        
+        // Thread-safe access to the current connection type
+        let connectionType = currentConnectionType ?? "unknown"
         return connectionType
 #else
         // Fallback for platforms where Network framework is not available
