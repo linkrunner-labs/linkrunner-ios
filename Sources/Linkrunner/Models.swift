@@ -104,22 +104,30 @@ public struct UserData: Sendable {
         self.email = email
     }
     
-    var dictionary: SendableDictionary {
+    /// Converts UserData to a dictionary, optionally hashing PII fields
+    /// - Parameter hashPII: Whether to hash PII fields
+    /// - Returns: Dictionary representation of UserData
+    func toDictionary(hashPII: Bool = false) -> SendableDictionary {
         var dict: SendableDictionary = ["id": id]
         
         if let name = name {
-            dict["name"] = name
+            dict["name"] = hashPII ? LinkrunnerSDK.shared.hashWithSHA256(name) : name
         }
         
         if let phone = phone {
-            dict["phone"] = phone
+            dict["phone"] = hashPII ? LinkrunnerSDK.shared.hashWithSHA256(phone) : phone
         }
         
         if let email = email {
-            dict["email"] = email
+            dict["email"] = hashPII ? LinkrunnerSDK.shared.hashWithSHA256(email) : email
         }
         
         return dict
+    }
+    
+    /// Legacy dictionary property for backward compatibility
+    var dictionary: SendableDictionary {
+        return toDictionary(hashPII: false)
     }
 }
 
@@ -163,8 +171,8 @@ public struct CampaignData: Codable, Sendable {
         
         self.id = id
         self.name = name
-        self.type = type
-        self.adNetwork = dictionary["ad_network"] as? String
+        self.type = CampaignType(rawValue: type) ?? .organic
+        self.adNetwork = (dictionary["ad_network"] as? String).flatMap { AdNetwork(rawValue: $0) }
         self.groupName = dictionary["group_name"] as? String
         self.assetGroupName = dictionary["asset_group_name"] as? String
         self.assetName = dictionary["asset_name"] as? String

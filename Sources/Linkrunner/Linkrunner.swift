@@ -18,6 +18,9 @@ import Network
 
 @available(iOS 15.0, *)
 public class LinkrunnerSDK: @unchecked Sendable {
+    // Configuration option for PII hashing
+    private var hashPII: Bool = false
+    
     // Define a Sendable device data structure
     private struct DeviceData: Sendable {
         var device: String
@@ -88,6 +91,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
     private var token: String?
     private let baseUrl = "https://api.linkrunner.io"
     
+
+    
 #if canImport(Network)
     private func setupNetworkMonitoring() {
         networkMonitor = NWPathMonitor()
@@ -142,6 +147,29 @@ public class LinkrunnerSDK: @unchecked Sendable {
         return try await initApiCall(token: token, source: "GENERAL")
     }
     
+    /// Enables or disables hashing of personally identifiable information (PII)
+    /// - Parameter enabled: Whether PII hashing should be enabled
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    public func enablePIIHashing(_ enabled: Bool = true) {
+        self.hashPII = enabled
+    }
+    
+    /// Returns whether PII hashing is currently enabled
+    /// - Returns: Boolean indicating if PII hashing is enabled
+    public func isPIIHashingEnabled() -> Bool {
+        return self.hashPII
+    }
+    
+    /// Hashes a string using SHA-256 algorithm
+    /// - Parameter input: The string to hash
+    /// - Returns: Hashed string in hexadecimal format
+    public func hashWithSHA256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        let hashString = hashedData.compactMap { String(format: "%02x", $0) }.joined()
+        return hashString
+    }
+    
     /// Register a user signup with Linkrunner
     /// - Parameter userData: User data to register
     /// - Parameter additionalData: Any additional data to include
@@ -154,7 +182,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         
         var requestData: SendableDictionary = [
             "token": token,
-            "user_data": userData.dictionary,
+            "user_data": userData.toDictionary(hashPII: self.hashPII),
             "platform": "IOS",
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
@@ -189,7 +217,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         
         let requestData: SendableDictionary = [
             "token": token,
-            "user_data": userData.dictionary,
+            "user_data": userData.toDictionary(hashPII: self.hashPII),
             "device_data": (await deviceData()).toDictionary(),
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
