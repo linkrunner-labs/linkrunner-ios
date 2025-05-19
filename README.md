@@ -6,7 +6,7 @@ A Swift package for integrating Linkrunner functionality into your iOS applicati
 
 For setup instructions, usage examples, and API reference, please visit:
 
-[docs.linkrunner.io](https://docs.linkrunner.io)
+[Linkrunner iOS SDK Documentation](https://docs.linkrunner.io/sdk/ios/installation)
 
 ## License
 
