@@ -52,8 +52,9 @@ public struct UserData: Sendable {
     public let mixPanelDistinctId: String?
     public let amplitudeDeviceId: String?
     public let posthogDistinctId: String?
+    public let clevertapId: String?
     
-    public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil, isFirstTimeUser: Bool? = nil, userCreatedAt: String? = nil, mixPanelDistinctId: String? = nil, amplitudeDeviceId: String? = nil, posthogDistinctId: String? = nil) {
+    public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil, isFirstTimeUser: Bool? = nil, userCreatedAt: String? = nil, mixPanelDistinctId: String? = nil, amplitudeDeviceId: String? = nil, posthogDistinctId: String? = nil, clevertapId: String? = nil) {
         self.id = id
         self.name = name
         self.phone = phone
@@ -63,6 +64,7 @@ public struct UserData: Sendable {
         self.mixPanelDistinctId = mixPanelDistinctId
         self.amplitudeDeviceId = amplitudeDeviceId
         self.posthogDistinctId = posthogDistinctId
+        self.clevertapId = clevertapId
     }
     
     /// Converts UserData to a dictionary, optionally hashing PII fields
@@ -101,6 +103,10 @@ public struct UserData: Sendable {
         
         if let posthogDistinctId = posthogDistinctId {
             dict["posthog_distinct_id"] = posthogDistinctId
+        }
+        
+        if let clevertapId = clevertapId {
+            dict["clevertap_id"] = clevertapId
         }
         
         return dict
