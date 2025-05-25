@@ -96,14 +96,12 @@ public struct UserData: Sendable {
     public let name: String?
     public let phone: String?
     public let email: String?
-    public let clevertapId: String?
     
-    public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil, clevertapId: String? = nil) {
+    public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil) {
         self.id = id
         self.name = name
         self.phone = phone
         self.email = email
-        self.clevertapId = clevertapId
     }
     
     /// Converts UserData to a dictionary, optionally hashing PII fields
@@ -122,10 +120,6 @@ public struct UserData: Sendable {
         
         if let email = email {
             dict["email"] = hashPII ? LinkrunnerSDK.shared.hashWithSHA256(email) : email
-        }
-        
-        if let clevertapId = clevertapId {
-            dict["clevertap_id"] = clevertapId
         }
         
         return dict
