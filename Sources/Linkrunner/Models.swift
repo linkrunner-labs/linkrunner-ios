@@ -55,6 +55,7 @@ public struct UserData: Sendable {
     public let clevertapId: String?
     
     public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil, isFirstTimeUser: Bool? = nil, userCreatedAt: String? = nil, mixPanelDistinctId: String? = nil, amplitudeDeviceId: String? = nil, posthogDistinctId: String? = nil, clevertapId: String? = nil) {
+    
         self.id = id
         self.name = name
         self.phone = phone
