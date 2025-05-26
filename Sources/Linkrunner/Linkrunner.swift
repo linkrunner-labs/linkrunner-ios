@@ -89,7 +89,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
     public static let shared = LinkrunnerSDK()
     
     private var token: String?
-    private let baseUrl = "https://api.linkrunner.io"
+    // private let baseUrl = "https://api.linkrunner.io"
+    private let baseUrl = "https://3b49-2401-4900-1f29-9e40-c47d-9e7b-d904-4a08.ngrok-free.app"
     
 
     
@@ -227,6 +228,47 @@ public class LinkrunnerSDK: @unchecked Sendable {
             endpoint: "/api/client/set-user-data",
             body: requestData
         )
+    }
+    
+    /// Set additional integration data
+    /// - Parameter integrationData: The integration data to set
+    /// - Returns: The response from the server, if any
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    public func setAdditionalData(_ integrationData: IntegrationData) async throws {
+        guard let token = self.token else {
+            throw LinkrunnerError.notInitialized
+        }
+        
+        // Check if integration data is valid (has at least one property set)
+        let integrationDict = integrationData.toDictionary()
+        if integrationDict.isEmpty {
+            throw LinkrunnerError.invalidParameters("Integration data is required")
+        }
+        
+        // Prepare request data
+        let installInstanceId = await getLinkRunnerInstallInstanceId()
+        let requestData: SendableDictionary = [
+            "token": token,
+            "install_instance_id": installInstanceId,
+            "integration_info": integrationDict,
+            "platform": "ios"
+        ]
+        
+        // Make the request
+        let response = try await HTTPClient.request(
+            url: baseUrl + "/api/client/integrations",
+            method: "POST",
+            body: requestData
+        )
+        
+        // Check if the request was successful
+        guard let status = response["status"] as? Int, (status == 200 || status == 201) else {
+            if let msg = response["msg"] as? String {
+                throw LinkrunnerError.apiError(msg)
+            } else {
+                throw LinkrunnerError.invalidResponse
+            }
+        }
     }
     
     /// Set Clevertap ID for integration with Clevertap

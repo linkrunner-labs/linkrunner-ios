@@ -182,6 +182,25 @@ public struct CampaignData: Codable, Sendable {
     }
 }
 
+public struct IntegrationData: Sendable {
+    public let clevertapId: String?
+    
+    public init(clevertapId: String? = nil) {
+        self.clevertapId = clevertapId
+    }
+    
+    /// Converts IntegrationData to a dictionary for API requests
+    func toDictionary() -> SendableDictionary {
+        var dict: SendableDictionary = [:]
+        
+        if let clevertapId = clevertapId {
+            dict["clevertap_id"] = clevertapId
+        }
+        
+        return dict
+    }
+}
+
 public enum PaymentType: String, Sendable {
     case firstPayment = "FIRST_PAYMENT"
     case walletTopup = "WALLET_TOPUP"
