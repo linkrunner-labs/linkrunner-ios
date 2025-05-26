@@ -271,31 +271,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
-    /// Set Clevertap ID for integration with Clevertap
-    /// - Parameter clevertapId: The Clevertap ID to set
-    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func setClevertapId(_ clevertapId: String) async throws {
-        guard let token = self.token else {
-            throw LinkrunnerError.notInitialized
-        }
-        
-        let installInstanceId = await getLinkRunnerInstallInstanceId()
-        
-        let requestData: SendableDictionary = [
-            "token": token,
-            "install_instance_id": installInstanceId,
-            "integration_info": [
-                "clevertap_id": clevertapId
-            ],
-            "platform": "ios"
-        ]
-        
-        _ = try await makeRequest(
-            endpoint: "/api/client/integrations",
-            body: requestData
-        )
-    }
-    
     /// Trigger the deeplink that led to app installation
     public func triggerDeeplink() async {
         guard let deeplinkUrl = try? await getDeeplinkURL(),
