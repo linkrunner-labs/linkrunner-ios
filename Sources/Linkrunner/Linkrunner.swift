@@ -89,9 +89,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     public static let shared = LinkrunnerSDK()
     
     private var token: String?
-    // private let baseUrl = "https://api.linkrunner.io"
-    private let baseUrl = "https://3b49-2401-4900-1f29-9e40-c47d-9e7b-d904-4a08.ngrok-free.app"
-    
+    private let baseUrl = "https://api.linkrunner.io"    
 
     
 #if canImport(Network)
@@ -254,9 +252,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
         ]
         
         // Make the request
-        let response = try await HTTPClient.request(
-            url: baseUrl + "/api/client/integrations",
-            method: "POST",
+        let response = try await makeRequest(
+            endpoint: "/api/client/integrations",
             body: requestData
         )
         
