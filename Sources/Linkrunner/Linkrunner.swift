@@ -237,13 +237,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.notInitialized
         }
         
-        // Check if integration data is valid (has at least one property set)
         let integrationDict = integrationData.toDictionary()
         if integrationDict.isEmpty {
             throw LinkrunnerError.invalidParameters("Integration data is required")
         }
         
-        // Prepare request data
         let installInstanceId = await getLinkRunnerInstallInstanceId()
         let requestData: SendableDictionary = [
             "token": token,
@@ -252,13 +250,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "ios"
         ]
         
-        // Make the request
         let response = try await makeRequest(
             endpoint: "/api/client/integrations",
             body: requestData
         )
         
-        // Check if the request was successful
         guard let status = response["status"] as? Int, (status == 200 || status == 201) else {
             if let msg = response["msg"] as? String {
                 throw LinkrunnerError.apiError(msg)
