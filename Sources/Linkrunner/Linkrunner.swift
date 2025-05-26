@@ -89,7 +89,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
     public static let shared = LinkrunnerSDK()
     
     private var token: String?
-    
     private let baseUrl = "https://api.linkrunner.io"    
 
     
