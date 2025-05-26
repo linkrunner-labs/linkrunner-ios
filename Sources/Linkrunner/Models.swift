@@ -346,7 +346,6 @@ public struct IntegrationData: Sendable {
         self.clevertapId = clevertapId
     }
     
-    /// Converts IntegrationData to a dictionary for API requests
     func toDictionary() -> SendableDictionary {
         var dict: SendableDictionary = [:]
         
