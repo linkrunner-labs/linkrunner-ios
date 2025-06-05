@@ -142,6 +142,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     public func initialize(token: String) async throws {
         self.token = token
+
         return try await initApiCall(token: token, source: "GENERAL")
     }
     
@@ -183,6 +184,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "IOS",
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
+        
         var dataDict: SendableDictionary = additionalData ?? [:]
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
