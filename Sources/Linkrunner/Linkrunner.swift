@@ -183,7 +183,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "IOS",
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
-        ß
         var dataDict: SendableDictionary = additionalData ?? [:]
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
