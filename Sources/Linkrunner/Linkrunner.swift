@@ -183,10 +183,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "IOS",
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
-        
-        if let additionalData = additionalData {
-            requestData["additional_data"] = additionalData
-        }
+        ß
+        var dataDict: SendableDictionary = additionalData ?? [:]
+        dataDict["device_data"] = (await deviceData()).toDictionary()
+        requestData["data"] = dataDict
         
         do {
             _ = try await makeRequest(
