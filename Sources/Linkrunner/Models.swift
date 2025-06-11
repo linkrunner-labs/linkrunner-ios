@@ -96,12 +96,22 @@ public struct UserData: Sendable {
     public let name: String?
     public let phone: String?
     public let email: String?
+    public let isFirstTimeUser: Bool?
+    public let userCreatedAt: String?
+    public let mixPanelDistinctId: String?
+    public let amplitudeDeviceId: String?
+    public let posthogDistinctId: String?
     
-    public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil) {
+    public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil, isFirstTimeUser: Bool? = nil, userCreatedAt: String? = nil, mixPanelDistinctId: String? = nil, amplitudeDeviceId: String? = nil, posthogDistinctId: String? = nil) {
         self.id = id
         self.name = name
         self.phone = phone
         self.email = email
+        self.isFirstTimeUser = isFirstTimeUser
+        self.userCreatedAt = userCreatedAt
+        self.mixPanelDistinctId = mixPanelDistinctId
+        self.amplitudeDeviceId = amplitudeDeviceId
+        self.posthogDistinctId = posthogDistinctId
     }
     
     /// Converts UserData to a dictionary, optionally hashing PII fields
@@ -120,6 +130,26 @@ public struct UserData: Sendable {
         
         if let email = email {
             dict["email"] = hashPII ? LinkrunnerSDK.shared.hashWithSHA256(email) : email
+        }
+        
+        if let isFirstTimeUser = isFirstTimeUser {
+            dict["is_first_time_user"] = isFirstTimeUser
+        }
+        
+        if let userCreatedAt = userCreatedAt {
+            dict["user_created_at"] = userCreatedAt
+        }
+        
+        if let mixPanelDistinctId = mixPanelDistinctId {
+            dict["mixpanel_distinct_id"] = mixPanelDistinctId
+        }
+        
+        if let amplitudeDeviceId = amplitudeDeviceId {
+            dict["amplitude_device_id"] = amplitudeDeviceId
+        }
+        
+        if let posthogDistinctId = posthogDistinctId {
+            dict["posthog_distinct_id"] = posthogDistinctId
         }
         
         return dict
