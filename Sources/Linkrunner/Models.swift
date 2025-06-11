@@ -54,7 +54,6 @@ public struct UserData: Sendable {
     public let posthogDistinctId: String?
     
     public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil, isFirstTimeUser: Bool? = nil, userCreatedAt: String? = nil, mixPanelDistinctId: String? = nil, amplitudeDeviceId: String? = nil, posthogDistinctId: String? = nil) {
-    
         self.id = id
         self.name = name
         self.phone = phone
@@ -173,6 +172,24 @@ public struct CampaignData: Codable, Sendable {
         } else {
             self.storeClickAt = nil
         }
+    }
+}
+
+public struct IntegrationData: Sendable {
+    public let clevertapId: String?
+    
+    public init(clevertapId: String? = nil) {
+        self.clevertapId = clevertapId
+    }
+    
+    func toDictionary() -> SendableDictionary {
+        var dict: SendableDictionary = [:]
+        
+        if let clevertapId = clevertapId {
+            dict["clevertap_id"] = clevertapId
+        }
+        
+        return dict
     }
 }
 
