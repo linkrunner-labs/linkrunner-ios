@@ -89,8 +89,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     public static let shared = LinkrunnerSDK()
     
     private var token: String?
-    private let baseUrl = "https://api.linkrunner.io"
-    
+    private let baseUrl = "https://api.linkrunner.io"    
 
     
 #if canImport(Network)
@@ -226,6 +225,42 @@ public class LinkrunnerSDK: @unchecked Sendable {
             endpoint: "/api/client/set-user-data",
             body: requestData
         )
+    }
+    
+    /// Set additional integration data
+    /// - Parameter integrationData: The integration data to set
+    /// - Returns: The response from the server, if any
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    public func setAdditionalData(_ integrationData: IntegrationData) async throws {
+        guard let token = self.token else {
+            throw LinkrunnerError.notInitialized
+        }
+        
+        let integrationDict = integrationData.toDictionary()
+        if integrationDict.isEmpty {
+            throw LinkrunnerError.invalidParameters("Integration data is required")
+        }
+        
+        let installInstanceId = await getLinkRunnerInstallInstanceId()
+        let requestData: SendableDictionary = [
+            "token": token,
+            "install_instance_id": installInstanceId,
+            "integration_info": integrationDict,
+            "platform": "ios"
+        ]
+        
+        let response = try await makeRequest(
+            endpoint: "/api/client/integrations",
+            body: requestData
+        )
+        
+        guard let status = response["status"] as? Int, (status == 200 || status == 201) else {
+            if let msg = response["msg"] as? String {
+                throw LinkrunnerError.apiError(msg)
+            } else {
+                throw LinkrunnerError.invalidResponse
+            }
+        }
     }
     
     /// Trigger the deeplink that led to app installation
@@ -512,7 +547,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "1.0.6" // Swift package version
+        return "1.1.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
