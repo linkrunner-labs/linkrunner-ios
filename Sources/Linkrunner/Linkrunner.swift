@@ -208,7 +208,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "IOS",
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
-        ß
+        
         var dataDict: SendableDictionary = additionalData ?? [:]
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
@@ -218,11 +218,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
                 endpoint: "/api/client/trigger",
                 body: requestData
             )
-            
-            // If we get here, the request was successful (makeRequest throws on error)
-            #if DEBUG
-            print("Linkrunner: Signup successful")
-            #endif
             
         } catch {
             #if DEBUG
@@ -601,7 +596,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "1.1.0" // Swift package version
+        return "1.2.0" // Swift package version
     }
     
     private func getAppVersion() -> String {

@@ -193,24 +193,6 @@ public struct IntegrationData: Sendable {
     }
 }
 
-public struct IntegrationData: Sendable {
-    public let clevertapId: String?
-    
-    public init(clevertapId: String? = nil) {
-        self.clevertapId = clevertapId
-    }
-    
-    func toDictionary() -> SendableDictionary {
-        var dict: SendableDictionary = [:]
-        
-        if let clevertapId = clevertapId {
-            dict["clevertap_id"] = clevertapId
-        }
-        
-        return dict
-    }
-}
-
 public enum PaymentType: String, Sendable {
     case firstPayment = "FIRST_PAYMENT"
     case walletTopup = "WALLET_TOPUP"
