@@ -89,6 +89,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
     public static let shared = LinkrunnerSDK()
     
     private var token: String?
+    private var secretKey: String?
+    private var keyId: String?
+    
+    // Request signing configuration
+    private let requestInterceptor = RequestSigningInterceptor()
     private let baseUrl = "https://api.linkrunner.io"    
 
     
@@ -136,13 +141,33 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     // MARK: - Public Methods
     
+    /// Configure request signing using raw key data
+    /// - Parameters:
+    ///   - secretKey: Secret key for HMAC signing
+    ///   - keyId: Key identifier for HMAC signing
+    public func configureRequestSigning(secretKey: String, keyId: String) {
+        requestInterceptor.configure(secretKey: secretKey, keyId: keyId)
+    }
+    
+    /// Reset request signing configuration
+    public func resetRequestSigning() {
+        requestInterceptor.reset()
+    }
+    
     /// Initialize the Linkrunner SDK with your project token
     /// - Parameter token: Your Linkrunner project token
-    /// - Returns: The initialization response
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func initialize(token: String) async throws -> LRInitResponse {
+    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil) async throws {
         self.token = token
         
+        // Only set secretKey and keyId when they are provided
+        if let secretKey = secretKey, let keyId = keyId, !secretKey.isEmpty, !keyId.isEmpty {
+            self.secretKey = secretKey
+            self.keyId = keyId
+            
+            // Configure request signing only when both secretKey and keyId are provided
+            configureRequestSigning(secretKey: secretKey, keyId: keyId)
+        }
         return try await initApiCall(token: token, source: "GENERAL")
     }
     
@@ -172,9 +197,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Register a user signup with Linkrunner
     /// - Parameter userData: User data to register
     /// - Parameter additionalData: Any additional data to include
-    /// - Returns: The trigger response
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func signup(userData: UserData, additionalData: SendableDictionary? = nil) async throws -> LRTriggerResponse {
+    public func signup(userData: UserData, additionalData: SendableDictionary? = nil) async throws {
         guard let token = self.token else {
             throw LinkrunnerError.notInitialized
         }
@@ -190,19 +214,17 @@ public class LinkrunnerSDK: @unchecked Sendable {
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
         
-        let response = try await makeRequest(
-            endpoint: "/api/client/trigger",
-            body: requestData
-        )
-        
-        #if DEBUG
-        print("Linkrunner: Signup called ")
-        #endif
-        
-        if let data = response["data"] as? SendableDictionary {
-            return try LRTriggerResponse(dictionary: data)
-        } else {
-            throw LinkrunnerError.invalidResponse
+        do {
+            _ = try await makeRequest(
+                endpoint: "/api/client/trigger",
+                body: requestData
+            )
+            
+        } catch {
+            #if DEBUG
+            print("Linkrunner: Signup failed with error: \(error)")
+            #endif
+            throw error
         }
     }
     
@@ -467,10 +489,41 @@ public class LinkrunnerSDK: @unchecked Sendable {
         #endif
     }
     
+    /// Fetches attribution data for the current installation
+    /// - Returns: The attribution data response
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    public func getAttributionData() async throws -> LRAttributionDataResponse {
+        guard let token = self.token else {
+            throw LinkrunnerError.notInitialized
+        }
+        
+        let requestData: SendableDictionary = [
+            "token": token,
+            "platform": "IOS",
+            "install_instance_id": await getLinkRunnerInstallInstanceId(),
+            "device_data": (await deviceData()).toDictionary()
+        ]
+        
+        let response = try await makeRequest(
+            endpoint: "/api/client/attribution-data",
+            body: requestData
+        )
+        
+        #if DEBUG
+        print("Linkrunner: Fetching attribution data")
+        #endif
+        
+        if let data = response["data"] as? SendableDictionary {
+            return try LRAttributionDataResponse(dictionary: data)
+        } else {
+            throw LinkrunnerError.invalidResponse
+        }
+    }
+    
     // MARK: - Private Methods
     
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    private func initApiCall(token: String, source: String, link: String? = nil) async throws -> LRInitResponse {
+    private func initApiCall(token: String, source: String, link: String? = nil) async throws {
         let deviceDataDict = (await deviceData()).toDictionary()
         let installInstanceId = await getLinkRunnerInstallInstanceId()
         
@@ -488,25 +541,22 @@ public class LinkrunnerSDK: @unchecked Sendable {
             requestData["link"] = link
         }
         
-        let response = try await makeRequest(
-            endpoint: "/api/client/init",
-            body: requestData
-        )
-        
-        #if DEBUG
-        print("Linkrunner initialized successfully ")
-        print("init response > ", response)
-        #endif
-        
-        if let data = response["data"] as? SendableDictionary,
-           let deeplink = data["deeplink"] as? String {
-            await setDeeplinkURL(deeplink)
-        }
-        
-        if let data = response["data"] as? SendableDictionary {
-            return try LRInitResponse(dictionary: data)
-        } else {
-            throw LinkrunnerError.invalidResponse
+        do {
+            _ = try await makeRequest(
+                endpoint: "/api/client/init",
+                body: requestData
+            )
+            
+            // If we get here, the request was successful (makeRequest throws on error)
+            #if DEBUG
+            print("Linkrunner: Initialization successful")
+            #endif
+            
+        } catch {
+            #if DEBUG
+            print("Linkrunner: Init failed with error: \(error)")
+            #endif
+            throw error
         }
     }
     
@@ -527,8 +577,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.jsonEncodingFailed
         }
         
-        // Since this method is already marked with @available for iOS 15+, we can directly use URLSession.shared.data(for:)        
-        let (responseData, response) = try await URLSession.shared.data(for: request)
+        // This will automatically handle signing if credentials are configured
+        let (responseData, response) = try await requestInterceptor.signAndSendRequest(request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw LinkrunnerError.invalidResponse
         }
@@ -547,7 +597,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "1.1.0" // Swift package version
+        return "2.0.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
