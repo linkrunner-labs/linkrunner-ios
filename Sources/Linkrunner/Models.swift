@@ -42,66 +42,27 @@ extension SendableDictionary: @unchecked Sendable {}
 
 // MARK: - Model Types
 
-public struct LRIPLocationData: Codable, Sendable {
-    public let ip: String
-    public let city: String
-    public let countryLong: String
-    public let countryShort: String
-    public let latitude: Double
-    public let longitude: Double
-    public let region: String
-    public let timeZone: String
-    public let zipCode: String
-    
-    enum CodingKeys: String, CodingKey {
-        case ip
-        case city
-        case countryLong = "country_long"
-        case countryShort = "country_short"
-        case latitude
-        case longitude
-        case region
-        case timeZone = "time_zone"
-        case zipCode = "zip_code"
-    }
-    
-    // Legacy dictionary initializer for backward compatibility
-    init(dictionary: SendableDictionary) throws {
-        guard let ip = dictionary["ip"] as? String,
-              let city = dictionary["city"] as? String,
-              let countryLong = dictionary["countryLong"] as? String,
-              let countryShort = dictionary["countryShort"] as? String,
-              let latitude = dictionary["latitude"] as? Double,
-              let longitude = dictionary["longitude"] as? Double,
-              let region = dictionary["region"] as? String,
-              let timeZone = dictionary["timeZone"] as? String,
-              let zipCode = dictionary["zipCode"] as? String else {
-            throw LinkrunnerError.invalidResponse
-        }
-        
-        self.ip = ip
-        self.city = city
-        self.countryLong = countryLong
-        self.countryShort = countryShort
-        self.latitude = latitude
-        self.longitude = longitude
-        self.region = region
-        self.timeZone = timeZone
-        self.zipCode = zipCode
-    }
-}
-
 public struct UserData: Sendable {
     public let id: String
     public let name: String?
     public let phone: String?
     public let email: String?
+    public let isFirstTimeUser: Bool?
+    public let userCreatedAt: String?
+    public let mixPanelDistinctId: String?
+    public let amplitudeDeviceId: String?
+    public let posthogDistinctId: String?
     
-    public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil) {
+    public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil, isFirstTimeUser: Bool? = nil, userCreatedAt: String? = nil, mixPanelDistinctId: String? = nil, amplitudeDeviceId: String? = nil, posthogDistinctId: String? = nil) {
         self.id = id
         self.name = name
         self.phone = phone
         self.email = email
+        self.isFirstTimeUser = isFirstTimeUser
+        self.userCreatedAt = userCreatedAt
+        self.mixPanelDistinctId = mixPanelDistinctId
+        self.amplitudeDeviceId = amplitudeDeviceId
+        self.posthogDistinctId = posthogDistinctId
     }
     
     /// Converts UserData to a dictionary, optionally hashing PII fields
@@ -120,6 +81,26 @@ public struct UserData: Sendable {
         
         if let email = email {
             dict["email"] = hashPII ? LinkrunnerSDK.shared.hashWithSHA256(email) : email
+        }
+        
+        if let isFirstTimeUser = isFirstTimeUser {
+            dict["is_first_time_user"] = isFirstTimeUser
+        }
+        
+        if let userCreatedAt = userCreatedAt {
+            dict["user_created_at"] = userCreatedAt
+        }
+        
+        if let mixPanelDistinctId = mixPanelDistinctId {
+            dict["mixpanel_distinct_id"] = mixPanelDistinctId
+        }
+        
+        if let amplitudeDeviceId = amplitudeDeviceId {
+            dict["amplitude_device_id"] = amplitudeDeviceId
+        }
+        
+        if let posthogDistinctId = posthogDistinctId {
+            dict["posthog_distinct_id"] = posthogDistinctId
         }
         
         return dict
@@ -194,148 +175,39 @@ public struct CampaignData: Codable, Sendable {
     }
 }
 
-public struct LRInitResponse: Codable, Sendable {
-    public let attributionSource: String
-    public let campaignData: CampaignData?
-    public let deeplink: String?
-    public let ipLocationData: LRIPLocationData
-    public let rootDomain: Bool
+public struct IntegrationData: Sendable {
+    public let clevertapId: String?
     
-    enum CodingKeys: String, CodingKey {
-        case attributionSource = "attribution_source"
-        case campaignData = "campaign_data"
-        case deeplink
-        case ipLocationData = "ip_location_data"
-        case rootDomain = "root_domain"
+    public init(clevertapId: String? = nil) {
+        self.clevertapId = clevertapId
     }
     
-    // Custom decoder to handle Bool/Int conversion for rootDomain
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+    func toDictionary() -> SendableDictionary {
+        var dict: SendableDictionary = [:]
         
-        attributionSource = try container.decodeIfPresent(String.self, forKey: .attributionSource) ?? "UNKNOWN"
-        campaignData = try container.decodeIfPresent(CampaignData.self, forKey: .campaignData)
-        deeplink = try container.decodeIfPresent(String.self, forKey: .deeplink)
-        ipLocationData = try container.decode(LRIPLocationData.self, forKey: .ipLocationData)
-        
-        // Handle Boolean or Integer 0/1 representation
-        if let boolValue = try? container.decode(Bool.self, forKey: .rootDomain) {
-            rootDomain = boolValue
-        } else if let intValue = try? container.decode(Int.self, forKey: .rootDomain) {
-            rootDomain = intValue != 0
-        } else {
-            rootDomain = false
-        }
-    }
-    
-    // Legacy dictionary initializer for backward compatibility
-    init(dictionary: SendableDictionary) throws {
-        guard let ipLocationDataDict = dictionary["ip_location_data"] as? SendableDictionary else {
-            throw LinkrunnerError.invalidResponse
+        if let clevertapId = clevertapId {
+            dict["clevertap_id"] = clevertapId
         }
         
-        self.attributionSource = dictionary["attribution_source"] as? String ?? "UNKNOWN"
-        
-        // Handle campaign_data - can be null
-        if let campaignDataDict = dictionary["campaign_data"] as? SendableDictionary {
-            self.campaignData = try CampaignData(dictionary: campaignDataDict)
-        } else {
-            self.campaignData = nil
-        }
-        
-        // Handle deeplink - can be null
-        if let deeplink = dictionary["deeplink"] as? String, deeplink != "<null>" {
-            self.deeplink = deeplink
-        } else {
-            self.deeplink = nil
-        }
-        
-        self.ipLocationData = try LRIPLocationData(dictionary: ipLocationDataDict)
-        
-        // Convert rootDomain to Bool
-        if let rootDomain = dictionary["root_domain"] as? Int {
-            self.rootDomain = rootDomain != 0
-        } else if let rootDomain = dictionary["root_domain"] as? Bool {
-            self.rootDomain = rootDomain
-        } else {
-            self.rootDomain = false
-        }
+        return dict
     }
 }
 
-public struct LRTriggerResponse: Codable, Sendable {
-    public let ipLocationData: LRIPLocationData
-    public let deeplink: String?
-    public let rootDomain: Bool
-    public let trigger: Bool?
-    public let campaignData: CampaignData?
-    public let attributionSource: String
+public struct IntegrationData: Sendable {
+    public let clevertapId: String?
     
-    enum CodingKeys: String, CodingKey {
-        case ipLocationData = "ip_location_data"
-        case deeplink
-        case rootDomain = "root_domain"
-        case trigger
-        case campaignData = "campaign_data"
-        case attributionSource = "attribution_source"
+    public init(clevertapId: String? = nil) {
+        self.clevertapId = clevertapId
     }
     
-    // Custom decoder to handle Bool/Int conversion for rootDomain
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+    func toDictionary() -> SendableDictionary {
+        var dict: SendableDictionary = [:]
         
-        ipLocationData = try container.decode(LRIPLocationData.self, forKey: .ipLocationData)
-        deeplink = try container.decodeIfPresent(String.self, forKey: .deeplink)
-        attributionSource = try container.decodeIfPresent(String.self, forKey: .attributionSource) ?? "UNKNOWN"
-        trigger = try container.decodeIfPresent(Bool.self, forKey: .trigger)
-        campaignData = try container.decodeIfPresent(CampaignData.self, forKey: .campaignData)
-        
-        // Handle Boolean or Integer 0/1 representation
-        if let boolValue = try? container.decode(Bool.self, forKey: .rootDomain) {
-            rootDomain = boolValue
-        } else if let intValue = try? container.decode(Int.self, forKey: .rootDomain) {
-            rootDomain = intValue != 0
-        } else {
-            rootDomain = false
-        }
-    }
-    
-    // Legacy dictionary initializer for backward compatibility
-    init(dictionary: SendableDictionary) throws {
-        guard let ipLocationDataDict = dictionary["ip_location_data"] as? SendableDictionary else {
-            throw LinkrunnerError.invalidResponse
+        if let clevertapId = clevertapId {
+            dict["clevertap_id"] = clevertapId
         }
         
-        self.ipLocationData = try LRIPLocationData(dictionary: ipLocationDataDict)
-        
-        // Handle deeplink - can be null
-        if let deeplink = dictionary["deeplink"] as? String, deeplink != "<null>" {
-            self.deeplink = deeplink
-        } else {
-            self.deeplink = nil
-        }
-        
-        // Handle attribution_source
-        self.attributionSource = dictionary["attribution_source"] as? String ?? "UNKNOWN"
-        
-        // Convert rootDomain to Bool
-        if let rootDomain = dictionary["root_domain"] as? Int {
-            self.rootDomain = rootDomain != 0
-        } else if let rootDomain = dictionary["root_domain"] as? Bool {
-            self.rootDomain = rootDomain
-        } else {
-            self.rootDomain = false
-        }
-        
-        // Handle trigger flag
-        self.trigger = dictionary["trigger"] as? Bool
-        
-        // Handle campaign_data - can be null
-        if let campaignDataDict = dictionary["campaign_data"] as? SendableDictionary {
-            self.campaignData = try CampaignData(dictionary: campaignDataDict)
-        } else {
-            self.campaignData = nil
-        }
+        return dict
     }
 }
 
@@ -382,5 +254,47 @@ public struct CaptureEventResponse: Codable, Sendable {
         case success
         case message
         case data
+    }
+}
+
+/// Response model for attribution data
+public struct LRAttributionDataResponse: Codable, Sendable {
+    
+    public let attributionSource: String
+    public let campaignData: CampaignData?
+    public let deeplink: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case attributionSource = "attribution_source"
+        case campaignData = "campaign_data"
+        case deeplink
+    }
+    
+    // Custom decoder to handle Bool/Int conversion for rootDomain
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        attributionSource = try container.decodeIfPresent(String.self, forKey: .attributionSource) ?? "UNKNOWN"
+        campaignData = try container.decodeIfPresent(CampaignData.self, forKey: .campaignData)
+        deeplink = try container.decodeIfPresent(String.self, forKey: .deeplink)
+    }
+    
+    // Legacy dictionary initializer for backward compatibility
+    init(dictionary: SendableDictionary) throws {
+        self.attributionSource = dictionary["attribution_source"] as? String ?? "UNKNOWN"
+        
+        // Handle campaign_data - can be null
+        if let campaignDataDict = dictionary["campaign_data"] as? SendableDictionary {
+            self.campaignData = try CampaignData(dictionary: campaignDataDict)
+        } else {
+            self.campaignData = nil
+        }
+        
+        // Handle deeplink - can be null
+        if let deeplink = dictionary["deeplink"] as? String, deeplink != "<null>" {
+            self.deeplink = deeplink
+        } else {
+            self.deeplink = nil
+        }
     }
 }
