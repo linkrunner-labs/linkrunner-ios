@@ -89,9 +89,12 @@ public class LinkrunnerSDK: @unchecked Sendable {
     public static let shared = LinkrunnerSDK()
     
     private var token: String?
+    private var secretKey: String?
+    private var keyId: String?
     private let baseUrl = "https://api.linkrunner.io"
     
-
+    // Request signing configuration
+    private let requestInterceptor = RequestSigningInterceptor()
     
 #if canImport(Network)
     private func setupNetworkMonitoring() {
@@ -137,13 +140,35 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     // MARK: - Public Methods
     
+    /// Configure request signing using raw key data
+    /// - Parameters:
+    ///   - secretKey: Secret key for HMAC signing
+    ///   - keyId: Key identifier for HMAC signing
+    public func configureRequestSigning(secretKey: String, keyId: String) {
+        requestInterceptor.configure(secretKey: secretKey, keyId: keyId)
+    }
+    
+    /// Reset request signing configuration
+    public func resetRequestSigning() {
+        requestInterceptor.reset()
+    }
+    
     /// Initialize the Linkrunner SDK with your project token
     /// - Parameter token: Your Linkrunner project token
     /// - Returns: The initialization response
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func initialize(token: String) async throws -> LRInitResponse {
+    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil) async throws -> LRInitResponse {
         self.token = token
         
+        // Only set secretKey and keyId when they are provided
+        if let secretKey = secretKey, let keyId = keyId, !secretKey.isEmpty, !keyId.isEmpty {
+            self.secretKey = secretKey
+            self.keyId = keyId
+            
+            // Configure request signing only when both secretKey and keyId are provided
+            configureRequestSigning(secretKey: secretKey, keyId: keyId)
+        }
+
         return try await initApiCall(token: token, source: "GENERAL")
     }
     
@@ -492,8 +517,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.jsonEncodingFailed
         }
         
-        // Since this method is already marked with @available for iOS 15+, we can directly use URLSession.shared.data(for:)        
-        let (responseData, response) = try await URLSession.shared.data(for: request)
+        // This will automatically handle signing if credentials are configured
+        let (responseData, response) = try await requestInterceptor.signAndSendRequest(request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw LinkrunnerError.invalidResponse
         }
