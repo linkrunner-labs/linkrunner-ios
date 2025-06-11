@@ -91,10 +91,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
     private var token: String?
     private var secretKey: String?
     private var keyId: String?
-    private let baseUrl = "https://api.linkrunner.io"
     
     // Request signing configuration
     private let requestInterceptor = RequestSigningInterceptor()
+    private let baseUrl = "https://api.linkrunner.io"    
+
     
 #if canImport(Network)
     private func setupNetworkMonitoring() {
@@ -596,7 +597,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "1.2.0" // Swift package version
+        return "2.0.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
