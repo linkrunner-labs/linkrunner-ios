@@ -103,27 +103,7 @@ extension RequestSigningInterceptor {
     public func signAndSendRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
         let signedRequest = signRequest(request)
         
-        // Log signed request details
-        #if DEBUG
-        print("\n--- Signed Request ---")
-        print("URL: \(signedRequest.url?.absoluteString ?? "N/A")")
-        print("Method: \(signedRequest.httpMethod ?? "N/A")")
-        print("Headers: \(signedRequest.allHTTPHeaderFields ?? [:])")
-        #endif
-        
-        // Send the signed request using the dedicated SDK session
         let (data, response) = try await sdkSession.data(for: signedRequest)
-        
-        #if DEBUG
-        if let httpResponse = response as? HTTPURLResponse {
-            print("\n--- Response ---")
-            print("Status: \(httpResponse.statusCode)")
-            print("Headers: \(httpResponse.allHeaderFields)")
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("Body: \(responseString.prefix(1000))" + (responseString.count > 1000 ? "..." : ""))
-            }
-        }
-        #endif
         
         return (data, response)
     }
