@@ -18,8 +18,9 @@ import Network
 
 @available(iOS 15.0, *)
 public class LinkrunnerSDK: @unchecked Sendable {
-    // Configuration option for PII hashing
+    // Configuration options
     private var hashPII: Bool = false
+    private var disableIdfa: Bool = false
     
     // Define a Sendable device data structure
     private struct DeviceData: Sendable {
@@ -157,8 +158,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Initialize the Linkrunner SDK with your project token
     /// - Parameter token: Your Linkrunner project token
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil) async throws {
+    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil, disableIdfa: Bool? = false) async throws {
         self.token = token
+        self.disableIdfa = disableIdfa ?? false
         
         // Only set secretKey and keyId when they are provided
         if let secretKey = secretKey, let keyId = keyId, !secretKey.isEmpty, !keyId.isEmpty {
@@ -641,26 +643,28 @@ extension LinkrunnerSDK {
             // Variable for IDFA
             var idfa: String? = nil
             
-            // Advertising ID
+            // Advertising ID - only collect if disableIdfa is false
+            if !self.disableIdfa {
 #if canImport(AppTrackingTransparency)
-            if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
-                // Create a continuation to make the async SDK call work in our async function
-                await withCheckedContinuation { continuation in
-                    DispatchQueue.main.async {
-                        ATTrackingManager.requestTrackingAuthorization { _ in
-                            continuation.resume()
+                if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
+                    // Create a continuation to make the async SDK call work in our async function
+                    await withCheckedContinuation { continuation in
+                        DispatchQueue.main.async {
+                            ATTrackingManager.requestTrackingAuthorization { _ in
+                                continuation.resume()
+                            }
                         }
                     }
                 }
-            }
-            
-            // Check the status after potential request
-            if ATTrackingManager.trackingAuthorizationStatus == .authorized {
+                
+                // Check the status after potential request
+                if ATTrackingManager.trackingAuthorizationStatus == .authorized {
 #if canImport(AdSupport)
-                idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
+                    idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
+#endif
+                }
 #endif
             }
-#endif
             
             // Device ID (for IDFV)
             let identifierForVendor = await currentDevice.identifierForVendor
