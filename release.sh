@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Extract version from podspec
-VERSION=$(grep -m 1 "s.version" Linkrunner.podspec | sed "s/.*= '\(.*\)'.*/\1/")
+VERSION=$(grep -m 1 "s.version" LinkrunnerKit.podspec | sed "s/.*= '\(.*\)'.*/\1/")
 
 echo "Found version: $VERSION in podspec"
 echo "Creating tag $VERSION..."

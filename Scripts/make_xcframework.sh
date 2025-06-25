@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-SCHEME="Linkrunner"
+SCHEME="LinkrunnerKit"
 ARCHIVE_DIR="build"
-FRAMEWORK="Linkrunner.xcframework"
+FRAMEWORK="LinkrunnerKit.xcframework"
 
 rm -rf "$ARCHIVE_DIR" "$FRAMEWORK"
 

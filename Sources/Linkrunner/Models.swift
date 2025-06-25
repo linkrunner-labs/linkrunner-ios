@@ -173,6 +173,44 @@ public struct CampaignData: Codable, Sendable {
             self.storeClickAt = nil
         }
     }
+
+
+    public func toDictionary() -> SendableDictionary {
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime]
+        
+        var dict: SendableDictionary = [
+            "id": id,
+            "name": name,
+            "type": type.rawValue
+        ]
+        
+        if let adNetwork = adNetwork {
+            dict["ad_network"] = adNetwork.rawValue
+        }
+        
+        if let groupName = groupName {
+            dict["group_name"] = groupName
+        }
+        
+        if let assetGroupName = assetGroupName {
+            dict["asset_group_name"] = assetGroupName
+        }
+        
+        if let assetName = assetName {
+            dict["asset_name"] = assetName
+        }
+        
+        if let installedAt = installedAt {
+            dict["installed_at"] = dateFormatter.string(from: installedAt)
+        }
+        
+        if let storeClickAt = storeClickAt {
+            dict["store_click_at"] = dateFormatter.string(from: storeClickAt)
+        }
+        
+        return dict
+    }
 }
 
 public struct IntegrationData: Sendable {
@@ -278,5 +316,21 @@ public struct LRAttributionDataResponse: Codable, Sendable {
         } else {
             self.deeplink = nil
         }
+    }
+
+    public func toDictionary() -> SendableDictionary {
+        var dict: SendableDictionary = [
+            "attribution_source": attributionSource
+        ]
+        
+        if let campaignData = campaignData {
+            dict["campaign_data"] = campaignData.toDictionary()
+        }
+        
+        if let deeplink = deeplink {
+            dict["deeplink"] = deeplink
+        }
+        
+        return dict
     }
 }

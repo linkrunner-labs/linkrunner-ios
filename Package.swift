@@ -2,32 +2,32 @@
 import PackageDescription
 
 let package = Package(
-    name: "Linkrunner",
+    name: "LinkrunnerKit",
     defaultLocalization: "en",
     platforms: [.iOS(.v15)],
     products: [
         // Default library - SPM will choose appropriate linkage based on client needs
         .library(
-            name: "Linkrunner",
-            targets: ["Linkrunner"]
+            name: "LinkrunnerKit",
+            targets: ["LinkrunnerKit"]
         ),
         // Static library for when static linking is explicitly required
         .library(
-            name: "LinkrunnerStatic",
+            name: "LinkrunnerKitStatic",
             type: .static,
-            targets: ["Linkrunner"]
+            targets: ["LinkrunnerKit"]
         ),
         // Dynamic library for when dynamic linking is explicitly required
         .library(
-            name: "LinkrunnerDynamic",
+            name: "LinkrunnerKitDynamic",
             type: .dynamic,
-            targets: ["Linkrunner"]
+            targets: ["LinkrunnerKit"]
         )
     ],
     dependencies: [],
     targets: [
         .target(
-            name: "Linkrunner",
+            name: "LinkrunnerKit",
             dependencies: [],
             path: "Sources/Linkrunner",
             cSettings: [
@@ -40,8 +40,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "LinkrunnerTests",
-            dependencies: ["Linkrunner"]
+            name: "LinkrunnerKitTests",
+            dependencies: ["LinkrunnerKit"]
         )
     ],
     swiftLanguageVersions: [.v5]
