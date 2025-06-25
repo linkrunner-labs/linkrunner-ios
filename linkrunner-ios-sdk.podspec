@@ -1,5 +1,5 @@
 Pod::Spec.new do |s|
-  s.name             = 'Linkrunner'
+  s.name             = 'linkrunner-ios-sdk'
   s.version          = '2.1.0'
   s.summary          = 'AI‑powered Mobile Measurement SDK.'
   s.description      = <<-DESC
@@ -11,11 +11,13 @@ Pod::Spec.new do |s|
   s.platform         = :ios, '15.0'
   s.swift_version    = '5.9'
   s.source           = { :git => 'https://github.com/linkrunner-labs/linkrunner-ios.git', :tag => s.version.to_s }
-  # --- Source distribution -----------------------------------------------
-  s.source_files     = 'Sources/Linkrunner/**/*.{swift}'
+  s.source_files     = 'Sources/Linkrunner/**/*.swift'
   s.frameworks       = 'Foundation', 'UIKit', 'Network'
-  # --- Swift compiler settings -------------------------------------------
+  s.module_name      = 'LinkrunnerSdk'
   s.pod_target_xcconfig = { 
+    'DEFINES_MODULE' => 'YES',
     'BUILD_LIBRARY_FOR_DISTRIBUTION' => 'YES',
+    'PRODUCT_MODULE_NAME' => 'LinkrunnerSdk',
+    'SWIFT_MODULE_NAME' => 'LinkrunnerSdk'
   }
 end
