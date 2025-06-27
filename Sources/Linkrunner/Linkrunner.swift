@@ -158,7 +158,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Initialize the Linkrunner SDK with your project token
     /// - Parameter token: Your Linkrunner project token
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil, disableIdfa: Bool? = false) async throws {
+    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil, disableIdfa: Bool? = false, debug: Bool? = false) async throws {
         self.token = token
         self.disableIdfa = disableIdfa ?? false
         
@@ -170,7 +170,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             // Configure request signing only when both secretKey and keyId are provided
             configureRequestSigning(secretKey: secretKey, keyId: keyId)
         }
-        return try await initApiCall(token: token, source: "GENERAL")
+        return try await initApiCall(token: token, source: "GENERAL", debug: debug)
     }
     
     /// Enables or disables hashing of personally identifiable information (PII)
@@ -525,7 +525,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     // MARK: - Private Methods
     
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    private func initApiCall(token: String, source: String, link: String? = nil) async throws {
+    private func initApiCall(token: String, source: String, link: String? = nil, debug: Bool? = false) async throws {
         let deviceDataDict = (await deviceData()).toDictionary()
         let installInstanceId = await getLinkRunnerInstallInstanceId()
         
@@ -536,7 +536,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "device_data": deviceDataDict,
             "platform": "IOS",
             "source": source,
-            "install_instance_id": installInstanceId
+            "install_instance_id": installInstanceId,
+            "debug": debug
         ]
         
         if let link = link {
