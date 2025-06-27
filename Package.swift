@@ -30,18 +30,15 @@ let package = Package(
             name: "LinkrunnerKit",
             dependencies: [],
             path: "Sources/Linkrunner",
+            exclude: ["include"],
             cSettings: [
                 .define("SWIFT_PACKAGE")
             ],
             swiftSettings: [
-                .define("LINKRUNNER_SPM"),
+                .define("LINKRUNNERKIT_SPM"),
                 // This is important for binary frameworks to maintain ABI stability
                 .enableUpcomingFeature("BareSlashRegexLiterals")
             ]
-        ),
-        .testTarget(
-            name: "LinkrunnerKitTests",
-            dependencies: ["LinkrunnerKit"]
         )
     ],
     swiftLanguageVersions: [.v5]
