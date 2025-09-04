@@ -236,8 +236,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
                 body: requestData
             )
 
-            print("Linkrunner: Signup response: \(response)")
-            print("Linkrunner: Updating SKAN for Signup")
             // Process SKAN conversion values from response in background
             await processSKANResponse(response, source: "signup")
             
