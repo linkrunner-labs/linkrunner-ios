@@ -401,7 +401,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "event_data": eventData as Any,
             "device_data": (await deviceData()).toDictionary(),
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
-            "time_since_app_install": await getTimeSinceAppInstall()
+            "time_since_app_install": await getTimeSinceAppInstall(),
+            "platform": "IOS"
         ]
         
         let response = try await makeRequest(
@@ -442,7 +443,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "IOS",
             "amount": amount,
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
-            "time_since_app_install": await getTimeSinceAppInstall()
+            "time_since_app_install": await getTimeSinceAppInstall(),
         ]
         
         if let paymentId = paymentId {
@@ -847,9 +848,6 @@ extension LinkrunnerSDK {
     
     private func getTimeSinceAppInstall() -> TimeInterval {
         print("Linkrunner: Getting time since app install")
-        print("Linkrunner: App install time: \(appInstallTime)")
-        print("Linkrunner: Date: \(Date())")
-        print("Linkrunner: Time since app install: \(Date().timeIntervalSince(appInstallTime ?? Date()))")
         guard let installTime = appInstallTime else {
             return 0
         }
@@ -858,29 +856,30 @@ extension LinkrunnerSDK {
     
     // MARK: - SKAN Response Processing
     
-    @available(iOS 14.0, *)
     private func processSKANResponse(_ response: SendableDictionary, source: String) async {
         // Process SKAN data in background to avoid blocking main thread
         Task.detached(priority: .utility) {
 
+            #if DEBUG
             print("LinkrunnerKit: Processing SKAN response from \(source)")
             print("LinkrunnerKit: Response: \(response)")
+            #endif
+
             let response = response["data"] as? SendableDictionary ?? [:]
             // Extract SKAN conversion values from response
             guard let fineValue = response["fine_conversion_value"] as? Int else {
                 return // No SKAN data in response
             }
 
-            print("LinkrunnerKit: Fine value: \(fineValue)")
             
             let coarseValue = response["coarse_conversion_value"] as? String
             let lockWindow = response["lock_postback"] as? Bool ?? false
 
-            print("LinkrunnerKit: Coarse value: \(coarseValue)")
-
-            print("LinkrunnerKit: Lock window: \(lockWindow)")
             
             #if DEBUG
+            print("LinkrunnerKit: Fine value: \(fineValue)")
+            print("LinkrunnerKit: Coarse value: \(coarseValue)")
+            print("LinkrunnerKit: Lock window: \(lockWindow)")
             print("LinkrunnerKit: Received SKAN values from \(source): fine=\(fineValue), coarse=\(coarseValue ?? "nil"), lock=\(lockWindow)")
             #endif
             
