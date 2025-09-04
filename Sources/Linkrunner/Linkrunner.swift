@@ -93,9 +93,13 @@ public class LinkrunnerSDK: @unchecked Sendable {
     private var secretKey: String?
     private var keyId: String?
     
+    // Time tracking for SKAN
+    private var appInstallTime: Date?
+    
     // Request signing configuration
     private let requestInterceptor = RequestSigningInterceptor()
-    private let baseUrl = "https://api.linkrunner.io"    
+    // private let baseUrl = "https://api.linkrunner.io"   
+    private let baseUrl = "https://5c48f7d8fab3.ngrok-free.app" 
 
     
 #if canImport(Network)
@@ -162,6 +166,14 @@ public class LinkrunnerSDK: @unchecked Sendable {
         self.token = token
         self.disableIdfa = disableIdfa ?? false
         
+        // Set app install time on first initialization
+        if appInstallTime == nil {
+            appInstallTime = getAppInstallTime()
+            
+            // Initialize SKAN with default values (0/low) on first init
+            await SKAdNetworkService.shared.registerInitialConversionValue()
+        }
+        
         // Only set secretKey and keyId when they are provided
         if let secretKey = secretKey, let keyId = keyId, !secretKey.isEmpty, !keyId.isEmpty {
             self.secretKey = secretKey
@@ -209,7 +221,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "token": token,
             "user_data": userData.toDictionary(hashPII: self.hashPII),
             "platform": "IOS",
-            "install_instance_id": await getLinkRunnerInstallInstanceId()
+            "install_instance_id": await getLinkRunnerInstallInstanceId(),
+            "time_since_app_install": await getTimeSinceAppInstall()
         ]
         
         var dataDict: SendableDictionary = additionalData ?? [:]
@@ -217,10 +230,15 @@ public class LinkrunnerSDK: @unchecked Sendable {
         requestData["data"] = dataDict
         
         do {
-            _ = try await makeRequest(
+            let response = try await makeRequest(
                 endpoint: "/api/client/trigger",
                 body: requestData
             )
+
+            print("Linkrunner: Signup response: \(response)")
+            print("Linkrunner: Updating SKAN for Signup")
+            // Process SKAN conversion values from response in background
+            await processSKANResponse(response, source: "signup")
             
         } catch {
             #if DEBUG
@@ -382,13 +400,17 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "event_name": eventName,
             "event_data": eventData as Any,
             "device_data": (await deviceData()).toDictionary(),
-            "install_instance_id": await getLinkRunnerInstallInstanceId()
+            "install_instance_id": await getLinkRunnerInstallInstanceId(),
+            "time_since_app_install": await getTimeSinceAppInstall()
         ]
         
-        _ = try await makeRequest(
+        let response = try await makeRequest(
             endpoint: "/api/client/capture-event",
             body: requestData
         )
+        
+        // Process SKAN conversion values from response in background
+        await processSKANResponse(response, source: "event")
         
         #if DEBUG
         print("Linkrunner: Tracking event", eventName, eventData ?? [:])
@@ -419,7 +441,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "user_id": userId,
             "platform": "IOS",
             "amount": amount,
-            "install_instance_id": await getLinkRunnerInstallInstanceId()
+            "install_instance_id": await getLinkRunnerInstallInstanceId(),
+            "time_since_app_install": await getTimeSinceAppInstall()
         ]
         
         if let paymentId = paymentId {
@@ -433,10 +456,13 @@ public class LinkrunnerSDK: @unchecked Sendable {
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
         
-        _ = try await makeRequest(
+        let response = try await makeRequest(
             endpoint: "/api/client/capture-payment",
             body: requestData
         )
+        
+        // Process SKAN conversion values from response in background
+        await processSKANResponse(response, source: "payment")
         
         #if DEBUG
         print("Linkrunner: Payment captured successfully ", [
@@ -801,5 +827,78 @@ extension LinkrunnerSDK {
     
     private func getDeeplinkURL() async throws -> String? {
         return UserDefaults.standard.string(forKey: LinkrunnerSDK.DEEPLINK_URL_STORAGE_KEY)
+    }
+    
+    // MARK: - App Install Time Tracking
+    
+    private static let APP_INSTALL_TIME_KEY = "linkrunner_app_install_time"
+    
+    private func getAppInstallTime() -> Date {
+        // Check if we already have the install time stored
+        if let storedTimestamp = UserDefaults.standard.object(forKey: LinkrunnerSDK.APP_INSTALL_TIME_KEY) as? Date {
+            return storedTimestamp
+        }
+        
+        // If not stored, use current time as install time and store it
+        let installTime = Date()
+        UserDefaults.standard.set(installTime, forKey: LinkrunnerSDK.APP_INSTALL_TIME_KEY)
+        return installTime
+    }
+    
+    private func getTimeSinceAppInstall() -> TimeInterval {
+        print("Linkrunner: Getting time since app install")
+        print("Linkrunner: App install time: \(appInstallTime)")
+        print("Linkrunner: Date: \(Date())")
+        print("Linkrunner: Time since app install: \(Date().timeIntervalSince(appInstallTime ?? Date()))")
+        guard let installTime = appInstallTime else {
+            return 0
+        }
+        return Date().timeIntervalSince(installTime)
+    }
+    
+    // MARK: - SKAN Response Processing
+    
+    @available(iOS 14.0, *)
+    private func processSKANResponse(_ response: SendableDictionary, source: String) async {
+        // Process SKAN data in background to avoid blocking main thread
+        Task.detached(priority: .utility) {
+
+            print("LinkrunnerKit: Processing SKAN response from \(source)")
+            print("LinkrunnerKit: Response: \(response)")
+            let response = response["data"] as? SendableDictionary ?? [:]
+            // Extract SKAN conversion values from response
+            guard let fineValue = response["fine_conversion_value"] as? Int else {
+                return // No SKAN data in response
+            }
+
+            print("LinkrunnerKit: Fine value: \(fineValue)")
+            
+            let coarseValue = response["coarse_conversion_value"] as? String
+            let lockWindow = response["lock_postback"] as? Bool ?? false
+
+            print("LinkrunnerKit: Coarse value: \(coarseValue)")
+
+            print("LinkrunnerKit: Lock window: \(lockWindow)")
+            
+            #if DEBUG
+            print("LinkrunnerKit: Received SKAN values from \(source): fine=\(fineValue), coarse=\(coarseValue ?? "nil"), lock=\(lockWindow)")
+            #endif
+            
+            // Update conversion value through SKAN service
+            let success = await SKAdNetworkService.shared.updateConversionValue(
+                fineValue: fineValue,
+                coarseValue: coarseValue,
+                lockWindow: lockWindow,
+                source: source
+            )
+            
+            #if DEBUG
+            if success {
+                print("LinkrunnerKit: Successfully updated SKAN conversion value from \(source)")
+            } else {
+                print("LinkrunnerKit: Failed to update SKAN conversion value from \(source)")
+            }
+            #endif
+        }
     }
 }
