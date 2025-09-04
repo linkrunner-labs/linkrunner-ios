@@ -21,6 +21,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     // Configuration options
     private var hashPII: Bool = false
     private var disableIdfa: Bool = false
+    private var debug: Bool = false
     
     // Define a Sendable device data structure
     private struct DeviceData: Sendable {
@@ -98,8 +99,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     // Request signing configuration
     private let requestInterceptor = RequestSigningInterceptor()
-    // private let baseUrl = "https://api.linkrunner.io"   
-    private let baseUrl = "https://5c48f7d8fab3.ngrok-free.app" 
+    private let baseUrl = "https://api.linkrunner.io"   
 
     
 #if canImport(Network)
@@ -165,6 +165,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil, disableIdfa: Bool? = false, debug: Bool? = false) async throws {
         self.token = token
         self.disableIdfa = disableIdfa ?? false
+        self.debug = debug ?? false
         
         // Set app install time on first initialization
         if appInstallTime == nil {
@@ -530,7 +531,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "token": token,
             "platform": "IOS",
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
-            "device_data": (await deviceData()).toDictionary()
+            "device_data": (await deviceData()).toDictionary(),
+            "debug": self.debug
         ]
         
         let response = try await makeRequest(
@@ -627,7 +629,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "3.0.2" // Swift package version
+        return "3.1.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
