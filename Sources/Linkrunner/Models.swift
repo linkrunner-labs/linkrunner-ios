@@ -233,6 +233,7 @@ public struct IntegrationData: Sendable {
 
 public enum PaymentType: String, Sendable {
     case firstPayment = "FIRST_PAYMENT"
+    case secondPayment = "SECOND_PAYMENT"
     case walletTopup = "WALLET_TOPUP"
     case fundsWithdrawal = "FUNDS_WITHDRAWAL"
     case subscriptionCreated = "SUBSCRIPTION_CREATED"

@@ -223,7 +223,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "user_data": userData.toDictionary(hashPII: self.hashPII),
             "platform": "IOS",
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
-            "time_since_app_install": await getTimeSinceAppInstall()
+            "time_since_app_install": getTimeSinceAppInstall()
         ]
         
         var dataDict: SendableDictionary = additionalData ?? [:]
@@ -400,7 +400,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "event_data": eventData as Any,
             "device_data": (await deviceData()).toDictionary(),
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
-            "time_since_app_install": await getTimeSinceAppInstall(),
+            "time_since_app_install": getTimeSinceAppInstall(),
             "platform": "IOS"
         ]
         
@@ -442,7 +442,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "IOS",
             "amount": amount,
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
-            "time_since_app_install": await getTimeSinceAppInstall(),
+            "time_since_app_install": getTimeSinceAppInstall(),
         ]
         
         if let paymentId = paymentId {
@@ -627,7 +627,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "3.1.0" // Swift package version
+        return "3.2.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
