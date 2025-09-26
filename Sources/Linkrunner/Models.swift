@@ -291,6 +291,13 @@ public struct LRAttributionDataResponse: Codable, Sendable {
         case deeplink
     }
     
+    // Public initializer for creating empty/default responses
+    public init(attributionSource: String, campaignData: CampaignData?, deeplink: String?) {
+        self.attributionSource = attributionSource
+        self.campaignData = campaignData
+        self.deeplink = deeplink
+    }
+    
     // Custom decoder to handle Bool/Int conversion for rootDomain
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
