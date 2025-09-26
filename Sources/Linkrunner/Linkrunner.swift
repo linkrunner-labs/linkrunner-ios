@@ -243,7 +243,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #if DEBUG
             print("Linkrunner: Signup failed with error: \(error)")
             #endif
-            throw error
         }
     }
     
@@ -262,10 +261,16 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
         
-        _ = try await makeRequest(
-            endpoint: "/api/client/set-user-data",
-            body: requestData
-        )
+        do {
+            _ = try await makeRequest(
+                endpoint: "/api/client/set-user-data",
+                body: requestData
+            )
+        } catch {
+            #if DEBUG
+            print("Linkrunner: setUserData failed with error: \(error)")
+            #endif
+        }
     }
     
     /// Set additional integration data
@@ -290,55 +295,23 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "ios"
         ]
         
-        let response = try await makeRequest(
-            endpoint: "/api/client/integrations",
-            body: requestData
-        )
-        
-        guard let status = response["status"] as? Int, (status == 200 || status == 201) else {
-            if let msg = response["msg"] as? String {
-                throw LinkrunnerError.apiError(msg)
-            } else {
-                throw LinkrunnerError.invalidResponse
+        do {
+            let response = try await makeRequest(
+                endpoint: "/api/client/integrations",
+                body: requestData
+            )
+            
+            guard let status = response["status"] as? Int, (status == 200 || status == 201) else {
+                let msg = response["msg"] as? String ?? "Unknown error"
+                #if DEBUG
+                print("Linkrunner: setAdditionalData failed with API error: \(msg)")
+                #endif
+                return
             }
-        }
-    }
-    
-    /// Trigger the deeplink that led to app installation
-    public func triggerDeeplink() async {
-        guard let deeplinkUrl = try? await getDeeplinkURL(),
-              let url = URL(string: deeplinkUrl) else {
-            print("Linkrunner: Deeplink URL not found")
-            return
-        }
-        
-        DispatchQueue.main.async {
-#if canImport(UIKit)
-            UIApplication.shared.open(url) { success in
-                if success {
-                    Task {
-                        guard let token = self.token else { return }
-                        
-                        do {
-                            let _ = try await self.makeRequest(
-                                endpoint: "/api/client/deeplink-triggered",
-                                body: ["token": token] as SendableDictionary
-                            )
-                            
-                            #if DEBUG
-                            print("Linkrunner: Deeplink triggered successfully", deeplinkUrl)
-                            #endif
-                        } catch {
-                            #if DEBUG
-                            print("Linkrunner: Deeplink triggering failed", deeplinkUrl)
-                            #endif
-                        }
-                    }
-                }
-            }
-#else
-            print("Linkrunner: UIApplication not available to open URLs")
-#endif
+        } catch {
+            #if DEBUG
+            print("Linkrunner: setAdditionalData failed with error: \(error)")
+            #endif
         }
     }
     
@@ -404,17 +377,23 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "IOS"
         ]
         
-        let response = try await makeRequest(
-            endpoint: "/api/client/capture-event",
-            body: requestData
-        )
-        
-        // Process SKAN conversion values from response in background
-        await processSKANResponse(response, source: "event")
-        
-        #if DEBUG
-        print("Linkrunner: Tracking event", eventName, eventData ?? [:])
-        #endif
+        do {
+            let response = try await makeRequest(
+                endpoint: "/api/client/capture-event",
+                body: requestData
+            )
+            
+            // Process SKAN conversion values from response in background
+            await processSKANResponse(response, source: "event")
+            
+            #if DEBUG
+            print("Linkrunner: Tracking event", eventName, eventData ?? [:])
+            #endif
+        } catch {
+            #if DEBUG
+            print("Linkrunner: trackEvent failed with error: \(error)")
+            #endif
+        }
     }
     
     /// Capture a payment
@@ -456,23 +435,29 @@ public class LinkrunnerSDK: @unchecked Sendable {
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
         
-        let response = try await makeRequest(
-            endpoint: "/api/client/capture-payment",
-            body: requestData
-        )
-        
-        // Process SKAN conversion values from response in background
-        await processSKANResponse(response, source: "payment")
-        
-        #if DEBUG
-        print("Linkrunner: Payment captured successfully ", [
-            "amount": amount,
-            "paymentId": paymentId ?? "N/A",
-            "userId": userId,
-            "type": type.rawValue,
-            "status": status.rawValue
-        ] as [String: Any])
-        #endif
+        do {
+            let response = try await makeRequest(
+                endpoint: "/api/client/capture-payment",
+                body: requestData
+            )
+            
+            // Process SKAN conversion values from response in background
+            await processSKANResponse(response, source: "payment")
+            
+            #if DEBUG
+            print("Linkrunner: Payment captured successfully ", [
+                "amount": amount,
+                "paymentId": paymentId ?? "N/A",
+                "userId": userId,
+                "type": type.rawValue,
+                "status": status.rawValue
+            ] as [String: Any])
+            #endif
+        } catch {
+            #if DEBUG
+            print("Linkrunner: capturePayment failed with error: \(error)")
+            #endif
+        }
     }
     
     /// Remove a captured payment
@@ -504,23 +489,29 @@ public class LinkrunnerSDK: @unchecked Sendable {
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
         
-        _ = try await makeRequest(
-            endpoint: "/api/client/remove-captured-payment",
-            body: requestData
-        )
-        
-        #if DEBUG
-        print("Linkrunner: Payment entry removed successfully!", [
-            "paymentId": paymentId ?? "N/A",
-            "userId": userId
-        ] as [String: Any])
-        #endif
+        do {
+            _ = try await makeRequest(
+                endpoint: "/api/client/remove-captured-payment",
+                body: requestData
+            )
+            
+            #if DEBUG
+            print("Linkrunner: Payment entry removed successfully!", [
+                "paymentId": paymentId ?? "N/A",
+                "userId": userId
+            ] as [String: Any])
+            #endif
+        } catch {
+            #if DEBUG
+            print("Linkrunner: removePayment failed with error: \(error)")
+            #endif
+        }
     }
     
     /// Fetches attribution data for the current installation
     /// - Returns: The attribution data response
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func getAttributionData() async throws -> LRAttributionDataResponse {
+    public func getAttributionData() async throws -> LRAttributionDataResponse? {
         guard let token = self.token else {
             throw LinkrunnerError.notInitialized
         }
@@ -532,20 +523,30 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "device_data": (await deviceData()).toDictionary(),
             "debug": self.debug
         ]
-        
-        let response = try await makeRequest(
-            endpoint: "/api/client/attribution-data",
-            body: requestData
-        )
-        
-        #if DEBUG
-        print("Linkrunner: Fetching attribution data")
-        #endif
-        
-        if let data = response["data"] as? SendableDictionary {
-            return try LRAttributionDataResponse(dictionary: data)
-        } else {
-            throw LinkrunnerError.invalidResponse
+
+        do {
+            let response = try await makeRequestWithoutRetry(
+                endpoint: "/api/client/attribution-data",
+                body: requestData
+            )
+            
+            #if DEBUG
+            print("LinkrunnerKit: Fetching attribution data")
+            #endif
+            
+            if let data = response["data"] as? SendableDictionary {
+                return try LRAttributionDataResponse(dictionary: data)
+            } else {
+                #if DEBUG
+                print("GetAttributionData: Invalid response")
+                #endif
+                return nil
+            }
+        } catch {
+            #if DEBUG
+            print("GetAttributionData: Failed to fetch attribution data - Error: \(error)")
+            #endif
+            return nil
         }
     }
     
@@ -577,7 +578,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
                 body: requestData
             )
             
-            // If we get here, the request was successful (makeRequest throws on error)
             #if DEBUG
             print("Linkrunner: Initialization successful")
             #endif
@@ -591,7 +591,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    private func makeRequest(endpoint: String, body: SendableDictionary) async throws -> SendableDictionary {
+    private func makeRequestWithoutRetry(endpoint: String, body: SendableDictionary) async throws -> SendableDictionary {
         guard let url = URL(string: baseUrl + endpoint) else {
             throw LinkrunnerError.invalidUrl
         }
@@ -613,17 +613,137 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.invalidResponse
         }
         
-        if httpResponse.statusCode < 200 || httpResponse.statusCode >= 300 {
-            throw LinkrunnerError.httpError(httpResponse.statusCode)
-        }
-        
-        guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
+        // Parse response without retry logic
+        guard let jsonResponse = try JSONSerialization.jsonObject(with: responseData) as? SendableDictionary else {
             throw LinkrunnerError.jsonDecodingFailed
         }
         
-        // Convert to SendableDictionary to ensure sendable compliance
-        let sendableJson = json as SendableDictionary
-        return sendableJson
+        return jsonResponse
+    }
+    
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    private func makeRequest(endpoint: String, body: SendableDictionary) async throws -> SendableDictionary {
+        return try await makeRequestWithRetry(endpoint: endpoint, body: body, attempt: 0)
+    }
+    
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    private func makeRequestWithRetry(endpoint: String, body: SendableDictionary, attempt: Int) async throws -> SendableDictionary {
+        guard let url = URL(string: baseUrl + endpoint) else {
+            throw LinkrunnerError.invalidUrl
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        } catch {
+            throw LinkrunnerError.jsonEncodingFailed
+        }
+        
+        do {
+            // This will automatically handle signing if credentials are configured
+            let (responseData, response) = try await requestInterceptor.signAndSendRequest(request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw LinkrunnerError.invalidResponse
+            }
+            
+            // Check for HTTP 500 errors that should trigger retry
+            if httpResponse.statusCode == 500 {
+                if attempt < 4 {
+                    #if DEBUG
+                    print("Linkrunner: HTTP 500 error on attempt \(attempt), retrying...")
+                    #endif
+                    return try await retryAfterDelay(endpoint: endpoint, body: body, attempt: attempt + 1)
+                } else {
+                    #if DEBUG
+                    print("Linkrunner: HTTP 500 error on final attempt \(attempt), failing")
+                    #endif
+                    throw LinkrunnerError.httpError(httpResponse.statusCode)
+                }
+            }
+            
+            if httpResponse.statusCode < 200 || httpResponse.statusCode >= 300 {
+                throw LinkrunnerError.httpError(httpResponse.statusCode)
+            }
+            
+            guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
+                throw LinkrunnerError.jsonDecodingFailed
+            }
+            
+            // Convert to SendableDictionary to ensure sendable compliance
+            let sendableJson = json as SendableDictionary
+            return sendableJson
+            
+        } catch {
+            // Check if this is a retryable network error
+            if isRetryableError(error) && attempt < 4 {
+                #if DEBUG
+                print("Linkrunner: Network error on attempt \(attempt), retrying... Error: \(error)")
+                #endif
+                return try await retryAfterDelay(endpoint: endpoint, body: body, attempt: attempt + 1)
+            } else {
+                #if DEBUG
+                if attempt >= 4 {
+                    print("Linkrunner: Network error on final attempt \(attempt), failing. Error: \(error)")
+                } else {
+                    print("Linkrunner: Non-retryable error: \(error)")
+                }
+                #endif
+                throw error
+            }
+        }
+    }
+    
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    private func retryAfterDelay(endpoint: String, body: SendableDictionary, attempt: Int) async throws -> SendableDictionary {
+        // Calculate exponential backoff delay: 2s, 4s, 8s for attempts 1, 2, 3
+        // Initial trigger is 0th attempt, then 3 retry attempts
+        // Formula: baseDelay * (2 ^ (attempt - 1))
+        let baseDelay: TimeInterval = 2.0
+        let delay = baseDelay * pow(2.0, Double(attempt - 1))
+        
+        #if DEBUG
+        print("Linkrunner: Waiting \(delay) seconds before retry attempt \(attempt)")
+        #endif
+        
+        // Task.sleep suspends the task for the specified duration
+        // Task.sleep does not block the thread, other tasks can run on the same thread
+        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        
+        return try await makeRequestWithRetry(endpoint: endpoint, body: body, attempt: attempt)
+    }
+    
+    private func isRetryableError(_ error: Error) -> Bool {
+        // Check for network connection errors
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet,
+                 .networkConnectionLost,
+                 .timedOut,
+                 .cannotConnectToHost,
+                 .cannotFindHost,
+                 .dnsLookupFailed,
+                 .resourceUnavailable:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        // Check for LinkrunnerError HTTP 500 (handled separately in makeRequestWithRetry)
+        if let linkrunnerError = error as? LinkrunnerError {
+            switch linkrunnerError {
+            case .httpError(let code):
+                return code == 500
+            default:
+                return false
+            }
+        }
+        
+        return false
     }
     
     private func getPackageVersion() -> String {
