@@ -162,7 +162,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Initialize the Linkrunner SDK with your project token
     /// - Parameter token: Your Linkrunner project token
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil, disableIdfa: Bool? = false, debug: Bool? = false) async throws {
+    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil, disableIdfa: Bool? = false, debug: Bool? = false) async {
         self.token = token
         self.disableIdfa = disableIdfa ?? false
         self.debug = debug ?? false
@@ -183,7 +183,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             // Configure request signing only when both secretKey and keyId are provided
             configureRequestSigning(secretKey: secretKey, keyId: keyId)
         }
-        return try await initApiCall(token: token, source: "GENERAL", debug: debug)
+        await initApiCall(token: token, source: "GENERAL", debug: debug)
     }
     
     /// Enables or disables hashing of personally identifiable information (PII)
@@ -213,9 +213,12 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// - Parameter userData: User data to register
     /// - Parameter additionalData: Any additional data to include
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func signup(userData: UserData, additionalData: SendableDictionary? = nil) async throws {
+    public func signup(userData: UserData, additionalData: SendableDictionary? = nil) async {
         guard let token = self.token else {
-            throw LinkrunnerError.notInitialized
+            #if DEBUG
+            print("Linkrunner: Signup failed - SDK not initialized")
+            #endif
+            return
         }
         
         var requestData: SendableDictionary = [
@@ -249,9 +252,12 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Set user data in Linkrunner
     /// - Parameter userData: User data to set
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func setUserData(_ userData: UserData) async throws {
+    public func setUserData(_ userData: UserData) async {
         guard let token = self.token else {
-            throw LinkrunnerError.notInitialized
+            #if DEBUG
+            print("Linkrunner: setUserData failed - SDK not initialized")
+            #endif
+            return
         }
         
         let requestData: SendableDictionary = [
@@ -277,14 +283,20 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// - Parameter integrationData: The integration data to set
     /// - Returns: The response from the server, if any
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func setAdditionalData(_ integrationData: IntegrationData) async throws {
+    public func setAdditionalData(_ integrationData: IntegrationData) async {
         guard let token = self.token else {
-            throw LinkrunnerError.notInitialized
+            #if DEBUG
+            print("Linkrunner: setAdditionalData failed - SDK not initialized")
+            #endif
+            return
         }
         
         let integrationDict = integrationData.toDictionary()
         if integrationDict.isEmpty {
-            throw LinkrunnerError.invalidParameters("Integration data is required")
+            #if DEBUG
+            print("Linkrunner: setAdditionalData failed - Integration data is required")
+            #endif
+            return
         }
         
         let installInstanceId = await getLinkRunnerInstallInstanceId()
@@ -358,13 +370,19 @@ public class LinkrunnerSDK: @unchecked Sendable {
     ///   - eventName: Name of the event
     ///   - eventData: Optional event data
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func trackEvent(eventName: String, eventData: SendableDictionary? = nil) async throws {
+    public func trackEvent(eventName: String, eventData: SendableDictionary? = nil) async {
         guard let token = self.token else {
-            throw LinkrunnerError.notInitialized
+            #if DEBUG
+            print("Linkrunner: trackEvent failed - SDK not initialized")
+            #endif
+            return
         }
         
         if eventName.isEmpty {
-            throw LinkrunnerError.invalidParameters("Event name is required")
+            #if DEBUG
+            print("Linkrunner: trackEvent failed - Event name is required")
+            #endif
+            return
         }
         
         let requestData: SendableDictionary = [
@@ -410,9 +428,12 @@ public class LinkrunnerSDK: @unchecked Sendable {
         paymentId: String? = nil,
         type: PaymentType = .default,
         status: PaymentStatus = .completed
-    ) async throws {
+    ) async {
         guard let token = self.token else {
-            throw LinkrunnerError.notInitialized
+            #if DEBUG
+            print("Linkrunner: capturePayment failed - SDK not initialized")
+            #endif
+            return
         }
         
         var requestData: SendableDictionary = [
@@ -465,13 +486,19 @@ public class LinkrunnerSDK: @unchecked Sendable {
     ///   - userId: User identifier
     ///   - paymentId: Optional payment identifier
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func removePayment(userId: String, paymentId: String? = nil) async throws {
+    public func removePayment(userId: String, paymentId: String? = nil) async {
         guard let token = self.token else {
-            throw LinkrunnerError.notInitialized
+            #if DEBUG
+            print("Linkrunner: removePayment failed - SDK not initialized")
+            #endif
+            return
         }
         
         if paymentId == nil && userId.isEmpty {
-            throw LinkrunnerError.invalidParameters("Either paymentId or userId must be provided")
+            #if DEBUG
+            print("Linkrunner: removePayment failed - Either paymentId or userId must be provided")
+            #endif
+            return
         }
         
         var requestData: SendableDictionary = [
@@ -511,9 +538,12 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Fetches attribution data for the current installation
     /// - Returns: The attribution data response
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func getAttributionData() async throws -> LRAttributionDataResponse? {
+    public func getAttributionData() async -> LRAttributionDataResponse? {
         guard let token = self.token else {
-            throw LinkrunnerError.notInitialized
+            #if DEBUG
+            print("GetAttributionData: SDK not initialized")
+            #endif
+            return nil
         }
         
         let requestData: SendableDictionary = [
@@ -553,7 +583,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     // MARK: - Private Methods
     
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    private func initApiCall(token: String, source: String, link: String? = nil, debug: Bool? = false) async throws {
+    private func initApiCall(token: String, source: String, link: String? = nil, debug: Bool? = false) async {
         let deviceDataDict = (await deviceData()).toDictionary()
         let installInstanceId = await getLinkRunnerInstallInstanceId()
         
@@ -586,7 +616,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #if DEBUG
             print("Linkrunner: Init failed with error: \(error)")
             #endif
-            throw error
         }
     }
     
