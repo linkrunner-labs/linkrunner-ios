@@ -537,7 +537,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     /// Fetches attribution data for the current installation
     /// - Returns: The attribution data response
-    // to ensure backward compatibility we return empty LRAttributionDataResponse on error
+    /// to ensure backward compatibility we return empty LRAttributionDataResponse on error
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     public func getAttributionData() async -> LRAttributionDataResponse {
         guard let token = self.token else {
@@ -778,16 +778,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
                  .badServerResponse,
                  .resourceUnavailable:
                 return true
-            default:
-                return false
-            }
-        }
-        
-        // Check for LinkrunnerError HTTP 500 (handled separately in makeRequestWithRetry)
-        if let linkrunnerError = error as? LinkrunnerError {
-            switch linkrunnerError {
-            case .httpError(let code):
-                return code == 500
             default:
                 return false
             }
