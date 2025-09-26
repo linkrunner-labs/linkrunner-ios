@@ -304,7 +304,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "token": token,
             "install_instance_id": installInstanceId,
             "integration_info": integrationDict,
-            "platform": "ios"
+            "platform": "IOS"
         ]
         
         do {
@@ -537,13 +537,18 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     /// Fetches attribution data for the current installation
     /// - Returns: The attribution data response
+    // to ensure backward compatibility we return empty LRAttributionDataResponse on error
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func getAttributionData() async -> LRAttributionDataResponse? {
+    public func getAttributionData() async -> LRAttributionDataResponse {
         guard let token = self.token else {
             #if DEBUG
             print("GetAttributionData: SDK not initialized")
             #endif
-            return nil
+            return LRAttributionDataResponse(
+                attributionSource: "Error getting attribution data",
+                campaignData: nil,  
+                deeplink: nil
+            )
         }
         
         let requestData: SendableDictionary = [
@@ -570,13 +575,21 @@ public class LinkrunnerSDK: @unchecked Sendable {
                 #if DEBUG
                 print("GetAttributionData: Invalid response")
                 #endif
-                return nil
+                return LRAttributionDataResponse(
+                    attributionSource: "Error getting attribution data",
+                    campaignData: nil,
+                    deeplink: nil
+                )
             }
         } catch {
             #if DEBUG
             print("GetAttributionData: Failed to fetch attribution data - Error: \(error)")
             #endif
-            return nil
+            return LRAttributionDataResponse(
+                attributionSource: "Error getting attribution data",
+                campaignData: nil,
+                deeplink: nil
+            )
         }
     }
     
@@ -642,6 +655,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
             throw LinkrunnerError.invalidResponse
         }
         
+        if httpResponse.statusCode < 200 || httpResponse.statusCode >= 300 {
+            throw LinkrunnerError.httpError(httpResponse.statusCode)
+        }
+        
         // Parse response without retry logic
         guard let jsonResponse = try JSONSerialization.jsonObject(with: responseData) as? SendableDictionary else {
             throw LinkrunnerError.jsonDecodingFailed
@@ -679,23 +696,26 @@ public class LinkrunnerSDK: @unchecked Sendable {
                 throw LinkrunnerError.invalidResponse
             }
             
+            let statusCode = httpResponse.statusCode
+            let shouldRetryHttp = (statusCode == 429) || (500...599).contains(statusCode)
+            
             // Check for HTTP 500 errors that should trigger retry
-            if httpResponse.statusCode == 500 {
+            if shouldRetryHttp {
                 if attempt < 4 {
                     #if DEBUG
-                    print("Linkrunner: HTTP 500 error on attempt \(attempt), retrying...")
+                    print("Linkrunner: HTTP \(statusCode) on attempt \(attempt), retrying...")
                     #endif
                     return try await retryAfterDelay(endpoint: endpoint, body: body, attempt: attempt + 1)
                 } else {
                     #if DEBUG
-                    print("Linkrunner: HTTP 500 error on final attempt \(attempt), failing")
+                    print("Linkrunner: HTTP \(statusCode) on final attempt \(attempt), failing")
                     #endif
                     throw LinkrunnerError.httpError(httpResponse.statusCode)
                 }
             }
             
-            if httpResponse.statusCode < 200 || httpResponse.statusCode >= 300 {
-                throw LinkrunnerError.httpError(httpResponse.statusCode)
+            if statusCode < 200 || statusCode >= 300 {
+                throw LinkrunnerError.httpError(statusCode)
             }
             
             guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
@@ -729,7 +749,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     private func retryAfterDelay(endpoint: String, body: SendableDictionary, attempt: Int) async throws -> SendableDictionary {
         // Calculate exponential backoff delay: 2s, 4s, 8s for attempts 1, 2, 3
-        // Initial trigger is 0th attempt, then 3 retry attempts
+        // Initial trigger is 0th attempt, then 4 retry attempts
         // Formula: baseDelay * (2 ^ (attempt - 1))
         let baseDelay: TimeInterval = 2.0
         let delay = baseDelay * pow(2.0, Double(attempt - 1))
@@ -755,6 +775,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
                  .cannotConnectToHost,
                  .cannotFindHost,
                  .dnsLookupFailed,
+                 .badServerResponse,
                  .resourceUnavailable:
                 return true
             default:
