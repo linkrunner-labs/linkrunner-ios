@@ -99,7 +99,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     // Request signing configuration
     private let requestInterceptor = RequestSigningInterceptor()
-    private let baseUrl = "https://api.linkrunner.io"   
+    private let baseUrl = "https://api.linkrunner.io"
 
     
 #if canImport(Network)
@@ -531,6 +531,47 @@ public class LinkrunnerSDK: @unchecked Sendable {
         } catch {
             #if DEBUG
             print("Linkrunner: removePayment failed with error: \(error)")
+            #endif
+        }
+    }
+    
+    /// Update the push notification token for the current user
+    /// - Parameter pushToken: The push notification token to be associated with the user
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    public func setPushToken(_ pushToken: String) async {
+        guard let token = self.token else {
+            #if DEBUG
+            print("Linkrunner: setPushToken failed - SDK not initialized")
+            #endif
+            return
+        }
+        
+        if pushToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            #if DEBUG
+            print("Linkrunner: setPushToken failed - Push token cannot be empty")
+            #endif
+            return
+        }
+        
+        let requestData: SendableDictionary = [
+            "token": token,
+            "push_token": pushToken,
+            "platform": "IOS",
+            "install_instance_id": await getLinkRunnerInstallInstanceId()
+        ]
+        
+        do {
+            _ = try await makeRequest(
+                endpoint: "/api/client/update-push-token",
+                body: requestData
+            )
+            
+            #if DEBUG
+            print("Linkrunner: Push token updated successfully")
+            #endif
+        } catch {
+            #if DEBUG
+            print("Linkrunner: setPushToken failed with error: \(error)")
             #endif
         }
     }
