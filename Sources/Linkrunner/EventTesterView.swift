@@ -108,6 +108,8 @@ struct EventTesterView: View {
         let parsedAmount: Double? = Double(amountString.trimmingCharacters(in: .whitespacesAndNewlines))
         if parsedAmount == nil {
             appendLog("Invalid amount. Please enter a valid number.")
+            isSubmitting = false
+            return
         }
         
         // Build event data dictionary
