@@ -39,7 +39,7 @@ struct EventTesterView: View {
                         .keyboardType(.decimalPad)
                     
                     TextField("currency", text: $currency)
-                        .textInputAutocapitalization(.never)
+                        .textInputAutocapitalization(.never)    
                         .autocorrectionDisabled()
                     
                     Toggle("is_featured", isOn: $isFeatured)
