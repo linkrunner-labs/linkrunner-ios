@@ -369,8 +369,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// - Parameters:
     ///   - eventName: Name of the event
     ///   - eventData: Optional event data
+    ///   - eventId: Optional unique identifier to deduplicate events server-side
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func trackEvent(eventName: String, eventData: SendableDictionary? = nil) async {
+    public func trackEvent(eventName: String, eventData: SendableDictionary? = nil, eventId: String? = nil) async {
         guard let token = self.token else {
             #if DEBUG
             print("Linkrunner: trackEvent failed - SDK not initialized")
@@ -385,7 +386,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             return
         }
         
-        let requestData: SendableDictionary = [
+        var requestData: SendableDictionary = [
             "token": token,
             "event_name": eventName,
             "event_data": eventData as Any,
@@ -394,6 +395,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "time_since_app_install": getTimeSinceAppInstall(),
             "platform": "IOS"
         ]
+        
+        if let eventId = eventId, !eventId.isEmpty {
+            requestData["event_id"] = eventId
+        }
         
         do {
             let response = try await makeRequest(
