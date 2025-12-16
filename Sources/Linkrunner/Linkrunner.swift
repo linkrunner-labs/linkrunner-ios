@@ -16,6 +16,10 @@ import AppTrackingTransparency
 import Network
 #endif
 
+#if canImport(AdServices)
+import AdServices
+#endif
+
 @available(iOS 15.0, *)
 public class LinkrunnerSDK: @unchecked Sendable {
     // Configuration options
@@ -44,6 +48,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         var timezoneOffset: Int?
         var userAgent: String?
         var installInstanceId: String
+        var adservicesAttributionToken: String?
         
         struct DisplayData: Sendable {
             var width: Double
@@ -79,6 +84,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             if let timezone = timezone { dict["timezone"] = timezone }
             if let timezoneOffset = timezoneOffset { dict["timezone_offset"] = timezoneOffset }
             if let userAgent = userAgent { dict["user_agent"] = userAgent }
+            if let adservicesAttributionToken = adservicesAttributionToken { dict["adservices_attribution_token"] = adservicesAttributionToken }
             
             return dict
         }
@@ -678,6 +684,24 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
+    /// Get attribution token from AdServices framework
+    /// - Returns: Attribution token string if available, nil otherwise
+    private func getAttributionToken() async -> String? {
+        #if canImport(AdServices)
+        do {
+            let token = try AAAttribution.attributionToken()
+            return token
+        } catch {
+            #if DEBUG
+            print("Linkrunner: Failed to get attribution token: \(error)")
+            #endif
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+    
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     private func makeRequestWithoutRetry(endpoint: String, body: SendableDictionary) async throws -> SendableDictionary {
         guard let url = URL(string: baseUrl + endpoint) else {
@@ -833,7 +857,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "3.6.0" // Swift package version
+        return "3.7.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
@@ -921,6 +945,9 @@ extension LinkrunnerSDK {
             // Install instance ID
             let installInstanceId = await getLinkRunnerInstallInstanceId()
             
+            // Attribution token from AdServices
+            let attributionToken = await getAttributionToken()
+            
             return DeviceData(
                 device: deviceModel,
                 deviceName: deviceName,
@@ -940,10 +967,14 @@ extension LinkrunnerSDK {
                 timezone: timezoneIdentifier,
                 timezoneOffset: timezoneOffset,
                 userAgent: userAgent,
-                installInstanceId: installInstanceId
+                installInstanceId: installInstanceId,
+                adservicesAttributionToken: attributionToken
             )
 #else
             // Fallback for non-UIKit platforms
+            // Attribution token from AdServices
+            let attributionToken = await getAttributionToken()
+            
             return DeviceData(
                 device: "Unknown",
                 deviceName: "Unknown",
@@ -963,7 +994,8 @@ extension LinkrunnerSDK {
                 timezone: nil,
                 timezoneOffset: nil,
                 userAgent: nil,
-                installInstanceId: await getLinkRunnerInstallInstanceId()
+                installInstanceId: await getLinkRunnerInstallInstanceId(),
+                adservicesAttributionToken: attributionToken
             )
 #endif
         }.value
