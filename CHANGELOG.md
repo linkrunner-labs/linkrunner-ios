@@ -5,6 +5,14 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.1] - 2025-01-XX
+
+### Added
+- **GA Session ID Support**: Added `gaSessionId` field to `UserData` model
+  - Allows tracking Google Analytics session ID alongside `gaAppInstanceId`
+  - Included in user data payloads as `ga_session_id` for enhanced analytics tracking
+  - Optional field that can be passed when creating `UserData` instances
+
 ## [3.7.0] - 2025-12-16
 
 ### Added
