@@ -10,8 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **GA Session ID Support**: Added `gaSessionId` field to `UserData` model
   - Allows tracking Google Analytics session ID alongside `gaAppInstanceId`
-  - Included in user data payloads as `ga_session_id` for enhanced analytics tracking
-  - Optional field that can be passed when creating `UserData` instances
 
 ## [3.7.0] - 2025-12-16
 
