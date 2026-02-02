@@ -54,8 +54,22 @@ public struct UserData: Sendable {
     public let posthogDistinctId: String?
     public let brazeDeviceId: String?
     public let gaAppInstanceId: String?
+    public let gaSessionId: String?
     
-    public init(id: String, name: String? = nil, phone: String? = nil, email: String? = nil, isFirstTimeUser: Bool? = nil, userCreatedAt: String? = nil, mixPanelDistinctId: String? = nil, amplitudeDeviceId: String? = nil, posthogDistinctId: String? = nil, brazeDeviceId: String? = nil, gaAppInstanceId: String? = nil) {
+    public init(
+        id: String,
+        name: String? = nil,
+        phone: String? = nil,
+        email: String? = nil,
+        isFirstTimeUser: Bool? = nil,
+        userCreatedAt: String? = nil,
+        mixPanelDistinctId: String? = nil,
+        amplitudeDeviceId: String? = nil,
+        posthogDistinctId: String? = nil,
+        brazeDeviceId: String? = nil,
+        gaAppInstanceId: String? = nil,
+        gaSessionId: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.phone = phone
@@ -67,6 +81,7 @@ public struct UserData: Sendable {
         self.posthogDistinctId = posthogDistinctId
         self.brazeDeviceId = brazeDeviceId
         self.gaAppInstanceId = gaAppInstanceId
+        self.gaSessionId = gaSessionId
     }
     
     /// Converts UserData to a dictionary, optionally hashing PII fields
@@ -113,6 +128,10 @@ public struct UserData: Sendable {
         
         if let gaAppInstanceId = gaAppInstanceId {
             dict["ga_app_instance_id"] = gaAppInstanceId
+        }
+
+        if let gaSessionId = gaSessionId {
+            dict["ga_session_id"] = gaSessionId
         }
         
         return dict
