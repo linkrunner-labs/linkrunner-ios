@@ -432,13 +432,15 @@ public class LinkrunnerSDK: @unchecked Sendable {
     ///   - paymentId: Optional payment identifier
     ///   - type: Optional payment type
     ///   - status: Optional payment status
+    ///   - eventData: Optional event data
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     public func capturePayment(
         amount: Double,
         userId: String,
         paymentId: String? = nil,
         type: PaymentType = .default,
-        status: PaymentStatus = .completed
+        status: PaymentStatus = .completed,
+        eventData: SendableDictionary? = nil
     ) async {
         guard let token = self.token else {
             #if DEBUG
@@ -452,10 +454,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "user_id": userId,
             "platform": "IOS",
             "amount": amount,
+            "event_data": eventData as Any,
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
             "time_since_app_install": getTimeSinceAppInstall(),
         ]
-        
         if let paymentId = paymentId {
             requestData["payment_id"] = paymentId
         }
