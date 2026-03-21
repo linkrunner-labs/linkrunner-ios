@@ -5,6 +5,14 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.81.0] - 2026-03-21
+
+### Added
+
+- **Netcore Device GUID Support**: Added `netcoreDeviceGuid` field to `UserData` model
+  - Allows tracking Netcore device GUID for integration with Netcore services
+  - Available in `signup` and `setUserData` functions
+
 ## [3.8.0] - 2026-02-24
 
 ### Added
