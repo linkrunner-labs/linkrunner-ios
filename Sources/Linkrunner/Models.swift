@@ -55,6 +55,7 @@ public struct UserData: Sendable {
     public let brazeDeviceId: String?
     public let gaAppInstanceId: String?
     public let gaSessionId: String?
+    public let netcoreDeviceGuid: String?
     
     public init(
         id: String,
@@ -68,7 +69,8 @@ public struct UserData: Sendable {
         posthogDistinctId: String? = nil,
         brazeDeviceId: String? = nil,
         gaAppInstanceId: String? = nil,
-        gaSessionId: String? = nil
+        gaSessionId: String? = nil,
+        netcoreDeviceGuid: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -82,6 +84,7 @@ public struct UserData: Sendable {
         self.brazeDeviceId = brazeDeviceId
         self.gaAppInstanceId = gaAppInstanceId
         self.gaSessionId = gaSessionId
+        self.netcoreDeviceGuid = netcoreDeviceGuid
     }
     
     /// Converts UserData to a dictionary, optionally hashing PII fields
@@ -132,6 +135,10 @@ public struct UserData: Sendable {
 
         if let gaSessionId = gaSessionId {
             dict["ga_session_id"] = gaSessionId
+        }
+        
+        if let netcoreDeviceGuid = netcoreDeviceGuid {
+            dict["netcore_device_guid"] = netcoreDeviceGuid
         }
         
         return dict
