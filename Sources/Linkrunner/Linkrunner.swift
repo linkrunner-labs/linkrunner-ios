@@ -647,6 +647,62 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
+    /// Handle a deeplink for re-engagement attribution.
+    /// Call this method when the app is opened via a deeplink, regardless of app state.
+    /// - Parameter url: The full deeplink URL that opened the app
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    public func handleDeeplink(url: String?) async {
+        guard let deeplinkUrl = url, !deeplinkUrl.isEmpty else {
+            #if DEBUG
+            print("Linkrunner: handleDeeplink called with nil or empty URL, ignoring")
+            #endif
+            return
+        }
+        
+        guard let token = self.token else {
+            #if DEBUG
+            print("Linkrunner: handleDeeplink failed - SDK not initialized. Call initialize() first.")
+            #endif
+            return
+        }
+        
+        #if DEBUG
+        print("Linkrunner: handleDeeplink called with URL: \(deeplinkUrl)")
+        #endif
+        
+        let deviceDataDict = (await deviceData()).toDictionary()
+        let installInstanceId = await getLinkRunnerInstallInstanceId()
+        let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
+        
+        let requestData: SendableDictionary = [
+            "token": token,
+            "platform": "IOS",
+            "install_instance_id": installInstanceId,
+            "deeplink_url": deeplinkUrl,
+            "device_data": deviceDataDict,
+            "timestamp": timestamp
+        ]
+        
+        do {
+            let response = try await makeRequest(
+                endpoint: "/api/client/handle-deeplink",
+                body: requestData
+            )
+            
+            #if DEBUG
+            print("Linkrunner: handleDeeplink successful")
+            #endif
+            
+            // Process SKAN conversion values from response if present
+            await processSKANResponse(response, source: "deeplink")
+            
+        } catch {
+            #if DEBUG
+            print("Linkrunner: handleDeeplink failed with error: \(error)")
+            #endif
+        }
+    }
+    
     // MARK: - Private Methods
     
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
@@ -859,7 +915,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "3.8.0" // Swift package version
+        return "3.10.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
