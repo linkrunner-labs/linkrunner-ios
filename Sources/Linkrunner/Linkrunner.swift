@@ -667,7 +667,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
         
         #if DEBUG
-        print("Linkrunner: handleDeeplink called with URL: \(deeplinkUrl)")
+        print("Linkrunner: handleDeeplink called.")
         #endif
         
         let deviceDataDict = (await deviceData()).toDictionary()
