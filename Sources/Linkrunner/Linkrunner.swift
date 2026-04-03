@@ -651,19 +651,19 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Call this method when the app is opened via a deeplink, regardless of app state.
     /// - Parameter url: The full deeplink URL that opened the app
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func handleDeeplink(url: String?) async {
+    public func handleDeeplink(url: String?) async -> LRDeeplinkResponse {
         guard let deeplinkUrl = url, !deeplinkUrl.isEmpty else {
             #if DEBUG
             print("Linkrunner: handleDeeplink called with nil or empty URL, ignoring")
             #endif
-            return
+            return LRDeeplinkResponse(deeplink: nil, isLinkrunner: false)
         }
         
         guard let token = self.token else {
             #if DEBUG
             print("Linkrunner: handleDeeplink failed - SDK not initialized. Call initialize() first.")
             #endif
-            return
+            return LRDeeplinkResponse(deeplink: url, isLinkrunner: false)
         }
         
         #if DEBUG
@@ -696,10 +696,20 @@ public class LinkrunnerSDK: @unchecked Sendable {
             // Process SKAN conversion values from response if present
             await processSKANResponse(response, source: "deeplink")
             
+            if let data = response["data"] as? SendableDictionary {
+                return LRDeeplinkResponse(dictionary: data)
+            } else {
+                #if DEBUG
+                print("Linkrunner: handleDeeplink - Invalid response data")
+                #endif
+                return LRDeeplinkResponse(deeplink: deeplinkUrl, isLinkrunner: false)
+            }
+            
         } catch {
             #if DEBUG
             print("Linkrunner: handleDeeplink failed with error: \(error)")
             #endif
+            return LRDeeplinkResponse(deeplink: deeplinkUrl, isLinkrunner: false)
         }
     }
     
