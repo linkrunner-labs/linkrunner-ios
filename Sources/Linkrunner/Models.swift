@@ -380,3 +380,35 @@ public struct LRAttributionDataResponse: Codable, Sendable {
         return dict
     }
 }
+
+/// Response model for handle-deeplink endpoint
+public struct LRDeeplinkResponse: Sendable {
+    public let deeplink: String?
+    public let isLinkrunner: Bool
+    public let processing: Bool?
+
+    public init(deeplink: String?, isLinkrunner: Bool, processing: Bool? = nil) {
+        self.deeplink = deeplink
+        self.isLinkrunner = isLinkrunner
+        self.processing = processing
+    }
+
+    init(dictionary: SendableDictionary) {
+        self.deeplink = dictionary["deeplink"] as? String
+        self.isLinkrunner = dictionary["is_linkrunner"] as? Bool ?? false
+        self.processing = dictionary["processing"] as? Bool
+    }
+
+    public func toDictionary() -> SendableDictionary {
+        var dict: SendableDictionary = [
+            "is_linkrunner": isLinkrunner
+        ]
+        if let deeplink = deeplink {
+            dict["deeplink"] = deeplink
+        }
+        if let processing = processing {
+            dict["processing"] = processing
+        }
+        return dict
+    }
+}
