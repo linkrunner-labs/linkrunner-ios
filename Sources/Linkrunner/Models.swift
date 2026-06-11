@@ -157,6 +157,11 @@ public struct CampaignData: Codable, Sendable {
     public let adNetwork: AdNetwork?
     public let groupName: String?
     public let assetGroupName: String?
+    public let adNetworkCampaignId: String?
+    public let adSetId: String?
+    public let adSetName: String?
+    public let adCreativeId: String?
+    public let adCreativeName: String?
     public let assetName: String?
     public let installedAt: Date?
     public let storeClickAt: Date?
@@ -176,6 +181,11 @@ public struct CampaignData: Codable, Sendable {
         case adNetwork = "ad_network"
         case groupName = "group_name"
         case assetGroupName = "asset_group_name"
+        case adNetworkCampaignId = "ad_network_campaign_id"
+        case adSetId = "ad_set_id"
+        case adSetName = "ad_set_name"
+        case adCreativeId = "ad_creative_id"
+        case adCreativeName = "ad_creative_name"
         case assetName = "asset_name"
         case installedAt = "installed_at"
         case storeClickAt = "store_click_at"
@@ -194,6 +204,11 @@ public struct CampaignData: Codable, Sendable {
         self.adNetwork = (dictionary["ad_network"] as? String).flatMap { AdNetwork(rawValue: $0) }
         self.groupName = dictionary["group_name"] as? String
         self.assetGroupName = dictionary["asset_group_name"] as? String
+        self.adNetworkCampaignId = dictionary["ad_network_campaign_id"] as? String
+        self.adSetId = dictionary["ad_set_id"] as? String
+        self.adSetName = dictionary["ad_set_name"] as? String
+        self.adCreativeId = dictionary["ad_creative_id"] as? String
+        self.adCreativeName = dictionary["ad_creative_name"] as? String
         self.assetName = dictionary["asset_name"] as? String
         
         // Parse date strings
@@ -234,7 +249,27 @@ public struct CampaignData: Codable, Sendable {
         if let assetGroupName = assetGroupName {
             dict["asset_group_name"] = assetGroupName
         }
-        
+
+        if let adNetworkCampaignId = adNetworkCampaignId {
+            dict["ad_network_campaign_id"] = adNetworkCampaignId
+        }
+
+        if let adSetId = adSetId {
+            dict["ad_set_id"] = adSetId
+        }
+
+        if let adSetName = adSetName {
+            dict["ad_set_name"] = adSetName
+        }
+
+        if let adCreativeId = adCreativeId {
+            dict["ad_creative_id"] = adCreativeId
+        }
+
+        if let adCreativeName = adCreativeName {
+            dict["ad_creative_name"] = adCreativeName
+        }
+
         if let assetName = assetName {
             dict["asset_name"] = assetName
         }
