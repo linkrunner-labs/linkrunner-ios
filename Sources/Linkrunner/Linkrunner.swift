@@ -288,7 +288,48 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #endif
         }
     }
-    
+
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    public func setCustomerUserId(_ userId: String) async {
+        guard let token = self.token else {
+            #if DEBUG
+            print("Linkrunner: setCustomerUserId failed - SDK not initialized")
+            #endif
+            return
+        }
+
+        if userId.isEmpty {
+            #if DEBUG
+            print("Linkrunner: setCustomerUserId failed - userId is empty")
+            #endif
+            return
+        }
+
+        if let existing = getUserId(), !existing.isEmpty {
+            return
+        }
+
+        setUserId(userId)
+
+        let requestData: SendableDictionary = [
+            "token": token,
+            "user_id": userId,
+            "platform": "IOS",
+            "install_instance_id": await getLinkRunnerInstallInstanceId()
+        ]
+
+        do {
+            _ = try await makeRequest(
+                endpoint: "/api/client/customer-user-id",
+                body: requestData
+            )
+        } catch {
+            #if DEBUG
+            print("Linkrunner: setCustomerUserId failed with error: \(error)")
+            #endif
+        }
+    }
+
     /// Set additional integration data
     /// - Parameter integrationData: The integration data to set
     /// - Returns: The response from the server, if any
