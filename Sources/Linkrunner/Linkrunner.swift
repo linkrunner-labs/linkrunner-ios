@@ -444,7 +444,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     public func capturePayment(
         amount: Double,
-        userId: String? = nil,
+        userId: String,
         paymentId: String? = nil,
         type: PaymentType = .default,
         status: PaymentStatus = .completed,
@@ -457,7 +457,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             return
         }
 
-        let resolvedUserId = (userId?.isEmpty == false ? userId : nil) ?? getUserId() ?? ""
+        let resolvedUserId = userId.isEmpty ? (getUserId() ?? "") : userId
 
         var requestData: SendableDictionary = [
             "token": token,
