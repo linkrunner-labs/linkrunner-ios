@@ -305,7 +305,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             return
         }
 
-        if let existing = getUserId(), !existing.isEmpty {
+        if let existing = getUserId(), existing == userId {
             return
         }
 
