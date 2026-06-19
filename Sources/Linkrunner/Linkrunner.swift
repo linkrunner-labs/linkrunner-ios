@@ -226,7 +226,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #endif
             return
         }
-        
+
+        setUserId(userData.id)
+
         var requestData: SendableDictionary = [
             "token": token,
             "user_data": userData.toDictionary(hashPII: self.hashPII),
@@ -265,7 +267,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #endif
             return
         }
-        
+
+        setUserId(userData.id)
+
         let requestData: SendableDictionary = [
             "token": token,
             "user_data": userData.toDictionary(hashPII: self.hashPII),
@@ -284,7 +288,48 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #endif
         }
     }
-    
+
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    public func setCustomerUserId(_ userId: String) async {
+        guard let token = self.token else {
+            #if DEBUG
+            print("Linkrunner: setCustomerUserId failed - SDK not initialized")
+            #endif
+            return
+        }
+
+        if userId.isEmpty {
+            #if DEBUG
+            print("Linkrunner: setCustomerUserId failed - userId is empty")
+            #endif
+            return
+        }
+
+        if let existing = getUserId(), existing == userId {
+            return
+        }
+
+        setUserId(userId)
+
+        let requestData: SendableDictionary = [
+            "token": token,
+            "user_id": userId,
+            "platform": "IOS",
+            "install_instance_id": await getLinkRunnerInstallInstanceId()
+        ]
+
+        do {
+            _ = try await makeRequest(
+                endpoint: "/api/client/customer-user-id",
+                body: requestData
+            )
+        } catch {
+            #if DEBUG
+            print("Linkrunner: setCustomerUserId failed with error: \(error)")
+            #endif
+        }
+    }
+
     /// Set additional integration data
     /// - Parameter integrationData: The integration data to set
     /// - Returns: The response from the server, if any
@@ -405,7 +450,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
         if let eventId = eventId, !eventId.isEmpty {
             requestData["event_id"] = eventId
         }
-        
+
+        if let userId = getUserId(), !userId.isEmpty {
+            requestData["user_id"] = userId
+        }
+
         do {
             let response = try await makeRequest(
                 endpoint: "/api/client/capture-event",
@@ -448,10 +497,12 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #endif
             return
         }
-        
+
+        let resolvedUserId = userId.isEmpty ? (getUserId() ?? "") : userId
+
         var requestData: SendableDictionary = [
             "token": token,
-            "user_id": userId,
+            "user_id": resolvedUserId,
             "platform": "IOS",
             "amount": amount,
             "event_data": eventData as Any,
@@ -482,7 +533,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             print("Linkrunner: Payment captured successfully ", [
                 "amount": amount,
                 "paymentId": paymentId ?? "N/A",
-                "userId": userId,
+                "userId": resolvedUserId,
                 "type": type.rawValue,
                 "status": status.rawValue
             ] as [String: Any])
@@ -925,7 +976,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "3.10.0" // Swift package version
+        return "3.11.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
@@ -1128,6 +1179,16 @@ extension LinkrunnerSDK {
         })
     }
     
+    private static let USER_ID_STORAGE_KEY = "linkrunner_user_id"
+
+    private func setUserId(_ userId: String?) {
+        KeychainHelper.set(userId, forKey: LinkrunnerSDK.USER_ID_STORAGE_KEY)
+    }
+
+    private func getUserId() -> String? {
+        return KeychainHelper.get(forKey: LinkrunnerSDK.USER_ID_STORAGE_KEY)
+    }
+
     private func setDeeplinkURL(_ deeplinkURL: String) async {
         UserDefaults.standard.set(deeplinkURL, forKey: LinkrunnerSDK.DEEPLINK_URL_STORAGE_KEY)
     }
