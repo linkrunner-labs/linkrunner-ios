@@ -498,7 +498,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             return
         }
 
-        guard !paymentId.isEmpty else {
+        guard !paymentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             #if DEBUG
             print("Linkrunner: capturePayment failed - paymentId is required")
             #endif
