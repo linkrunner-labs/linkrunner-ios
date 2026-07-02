@@ -478,7 +478,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// - Parameters:
     ///   - amount: Payment amount
     ///   - userId: User identifier
-    ///   - paymentId: Optional payment identifier
+    ///   - paymentId: Payment identifier (required)
     ///   - type: Optional payment type
     ///   - status: Optional payment status
     ///   - eventData: Optional event data
@@ -486,7 +486,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     public func capturePayment(
         amount: Double,
         userId: String,
-        paymentId: String? = nil,
+        paymentId: String,
         type: PaymentType = .default,
         status: PaymentStatus = .completed,
         eventData: SendableDictionary? = nil
@@ -494,6 +494,13 @@ public class LinkrunnerSDK: @unchecked Sendable {
         guard let token = self.token else {
             #if DEBUG
             print("Linkrunner: capturePayment failed - SDK not initialized")
+            #endif
+            return
+        }
+
+        guard !paymentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            #if DEBUG
+            print("Linkrunner: capturePayment failed - paymentId is required")
             #endif
             return
         }
@@ -508,11 +515,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "event_data": eventData as Any,
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
             "time_since_app_install": getTimeSinceAppInstall(),
+            "payment_id": paymentId,
         ]
-        if let paymentId = paymentId {
-            requestData["payment_id"] = paymentId
-        }
-        
+
         requestData["type"] = type.rawValue
         requestData["status"] = status.rawValue
         
@@ -532,7 +537,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #if DEBUG
             print("Linkrunner: Payment captured successfully ", [
                 "amount": amount,
-                "paymentId": paymentId ?? "N/A",
+                "paymentId": paymentId,
                 "userId": resolvedUserId,
                 "type": type.rawValue,
                 "status": status.rawValue
@@ -976,7 +981,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "3.11.0" // Swift package version
+        return "4.0.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
