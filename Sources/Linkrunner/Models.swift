@@ -53,11 +53,8 @@ public enum ConsentStatus: String, Sendable {
     case granted
     /// The user refused consent. Sent to Google as `0`.
     case denied
-    /// You do not know the user's choice — they have not been asked yet, your CMP has
-    /// not resolved, or the signal does not apply. **Omitted from the request entirely**,
-    /// so Google can tell "we were never told" apart from "the user said no".
-    ///
-    /// This is the default. Leaving a signal `unknown` is always safer than guessing.
+    /// The user's choice is not known. Omitted from the request rather than sent as a
+    /// denial. This is the default.
     case unknown
 
     /// Wire form: `"1"`, `"0"`, or `nil` when unknown (the parameter is then omitted).
@@ -80,65 +77,25 @@ public enum ConsentStatus: String, Sendable {
 /// IDFA access, not Google's use of ad user data or personalization. The SDK reports
 /// ATT status separately.
 public struct LinkrunnerConsent: Sendable, Equatable {
-    /// Whether European regulations apply to this user, sent to Google as `is_eea`.
-    ///
-    /// Despite the name, this is **broader than the EEA and broader than GDPR**. Google
-    /// defines the parameter as "European regulations apply to this user and
-    /// conversion", which covers GDPR (EEA), UK GDPR, the Swiss FADP and the DMA. Set it
-    /// `.granted` for users in the **EEA, the United Kingdom or Switzerland** — a UK user
-    /// is subject to UK GDPR rather than GDPR, and a Swiss user to the FADP, but both are
-    /// in scope here. That population is also exactly the scope of Integrated Conversion
-    /// Measurement, so getting this wrong silently excludes the users ICM exists for.
-    ///
-    /// The name mirrors the wire key and Google's own `eea` parameter.
+    /// Whether European regulations apply to this user — the EEA, the United Kingdom or
+    /// Switzerland. Sent to Google as `is_eea`.
     public let isEEA: ConsentStatus
-    /// Whether the user consented to their data being **sent to Google** for advertising
+
+    /// Whether the user consented to their data being sent to Google for advertising
     /// purposes. Sent as `ad_user_data`.
-    ///
-    /// This governs transmission: may we share this user's data with Google at all.
-    /// Without it Google cannot attribute the conversion to a campaign, so a denial
-    /// generally means the install is not measurable through Google.
-    ///
-    /// Typically maps to your CMP's "share data with advertising partners" choice, or
-    /// TCF purposes 1 and 7.
-    ///
-    /// Not the same as ATT: a user can allow tracking at the iOS level and still refuse
-    /// this, or vice versa.
     public let hasConsentForDataUsage: ConsentStatus
 
-    /// Whether the user consented to their data being used to **personalize ads**.
+    /// Whether the user consented to their data being used to personalize ads.
     /// Sent as `ad_personalization`.
-    ///
-    /// This governs use rather than transmission: Google may still measure the
-    /// conversion, but may not use the data to build a profile or target ads. Denying
-    /// this while granting ``hasConsentForDataUsage`` is a normal, common combination.
-    ///
-    /// Typically maps to your CMP's "personalized advertising" choice, or TCF
-    /// purposes 3 and 4.
     public let hasConsentForAdsPersonalization: ConsentStatus
 
-    /// Creates a consent state to hand to `LinkrunnerSDK.shared.setConsent(_:)`.
-    ///
-    /// Every parameter defaults to `.unknown`, so you can supply only what you actually
-    /// know — omitted signals are left out of the payload rather than guessed at.
-    ///
-    /// ```swift
-    /// LinkrunnerSDK.shared.setConsent(LinkrunnerConsent(
-    ///     isEEA: .granted,
-    ///     hasConsentForDataUsage: .granted,
-    ///     hasConsentForAdsPersonalization: .denied
-    /// ))
-    /// ```
-    ///
     /// - Parameters:
-    ///   - isEEA: Whether **European regulations apply** to this user — the EEA, the
-    ///     United Kingdom *or* Switzerland. Broader than GDPR alone, and it is exactly
-    ///     the population Integrated Conversion Measurement covers. Sent as `is_eea`.
-    ///   - hasConsentForDataUsage: Whether the user consented to their data being **sent
-    ///     to Google** for advertising. Governs transmission. Sent as `ad_user_data`.
-    ///   - hasConsentForAdsPersonalization: Whether the user consented to their data
-    ///     being used to **personalize ads**. Governs use, not transmission, so denying
-    ///     it while granting data usage is normal. Sent as `ad_personalization`.
+    ///   - isEEA: Whether European regulations apply to this user — the EEA, the United
+    ///     Kingdom or Switzerland. Sent as `is_eea`.
+    ///   - hasConsentForDataUsage: Whether the user consented to their data being sent to
+    ///     Google for advertising purposes. Sent as `ad_user_data`.
+    ///   - hasConsentForAdsPersonalization: Whether the user consented to their data being
+    ///     used to personalize ads. Sent as `ad_personalization`.
     public init(
         isEEA: ConsentStatus = .unknown,
         hasConsentForDataUsage: ConsentStatus = .unknown,

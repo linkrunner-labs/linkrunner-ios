@@ -223,20 +223,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// the app having to re-supply it on every launch. Anything left `.unknown` is
     /// reported as unknown rather than assumed granted, and is omitted from the payload.
     ///
-    /// ```swift
-    /// // after your CMP resolves
-    /// LinkrunnerSDK.shared.setConsent(LinkrunnerConsent(
-    ///     isEEA: .granted,                        // European regulations apply
-    ///     hasConsentForDataUsage: .granted,       // may send data to Google
-    ///     hasConsentForAdsPersonalization: .denied // may not personalize ads
-    /// ))
-    /// await LinkrunnerSDK.shared.initialize(token: "YOUR_TOKEN")
-    /// ```
-    ///
-    /// Required only if you run Google App Campaigns and have users in the EEA, the UK
-    /// or Switzerland. Omitting it degrades attribution for those users but is otherwise
-    /// safe — nothing is ever reported as granted on a guess.
-    ///
     /// - Parameter consent: consent signals from your Consent Management Platform.
     ///   See ``LinkrunnerConsent`` for what each signal means.
     public func setConsent(_ consent: LinkrunnerConsent) {
