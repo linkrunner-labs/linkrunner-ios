@@ -60,12 +60,6 @@ enum TCFConsent {
         )
     }
 
-    /// True when any TCF key is present, i.e. a CMP has written something.
-    static func isAvailable(in defaults: UserDefaults = .standard) -> Bool {
-        return defaults.object(forKey: gdprAppliesKey) != nil
-            || defaults.string(forKey: purposeConsentsKey) != nil
-    }
-
     // MARK: - Private
 
     /// `IABTCF_gdprApplies` is specified as an integer, but CMPs have been observed

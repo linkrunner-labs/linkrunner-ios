@@ -119,10 +119,14 @@ public class LinkrunnerSDK: @unchecked Sendable {
     // Time tracking for SKAN
     private var appInstallTime: Date?
 
-    // Google Ads consent, supplied by the host app's CMP. Restored from storage on first
-    // access so a returning user keeps their state without the app re-supplying it.
-    // Defaults to all-unknown, reported as "not known" rather than assumed permissive.
-    private lazy var consent: LinkrunnerConsent = LinkrunnerSDK.loadPersistedConsent()
+    // Google Ads consent, supplied by the host app's CMP. Restored from storage in init
+    // so a returning user keeps their state without the app re-supplying it. Defaults to
+    // all-unknown, reported as "not known" rather than assumed permissive.
+    //
+    // Assigned eagerly rather than `lazy`: this is read from `deviceData()` on every
+    // request, and Swift's lazy initialization is not atomic, so concurrent API calls
+    // could enter the initializer at once.
+    private var consent: LinkrunnerConsent
 
     /// When enabled, consent is read from an IAB TCF CMP's `IABTCF_*` keys for any
     /// signal the app has not set explicitly. Opt-in — see `enableTCFConsentCollection`.
@@ -136,6 +140,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// every request, which meant a synchronous `AAAttribution.attributionToken()` call
     /// on each network call rather than once per install.
     private var cachedAttributionToken: String?
+
+    /// Hardware model identifier, resolved once. `deviceData()` runs on every request
+    /// and the hardware cannot change mid-process, so there is no reason to call
+    /// `uname` more than once.
+    private let deviceModelIdentifier: String? = LinkrunnerSDK.readDeviceModelIdentifier()
 
     /// Upper bound on the ODM fetch during `initialize`. Google publishes no latency
     /// figure; this is our own bound, and should be tuned from measured p95.
@@ -183,6 +192,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
 #endif
     
     private init() {
+        self.consent = LinkrunnerSDK.loadPersistedConsent()
 #if canImport(Network)
         setupNetworkMonitoring()
 #endif
@@ -979,7 +989,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     ///
     /// On the simulator `uname` reports the host architecture (`arm64`/`x86_64`), so we
     /// prefer the simulator's own model identifier to keep test payloads meaningful.
-    private func getDeviceModelIdentifier() -> String? {
+    private static func readDeviceModelIdentifier() -> String? {
         if let simulatorModel = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"],
            !simulatorModel.isEmpty {
             return simulatorModel
@@ -1262,7 +1272,7 @@ extension LinkrunnerSDK {
             
             return DeviceData(
                 device: deviceModel,
-                deviceModelIdentifier: self.getDeviceModelIdentifier(),
+                deviceModelIdentifier: self.deviceModelIdentifier,
                 deviceName: deviceName,
                 systemVersion: systemVersion,
                 brand: "Apple",
@@ -1294,7 +1304,7 @@ extension LinkrunnerSDK {
             
             return DeviceData(
                 device: "Unknown",
-                deviceModelIdentifier: self.getDeviceModelIdentifier(),
+                deviceModelIdentifier: self.deviceModelIdentifier,
                 deviceName: "Unknown",
                 systemVersion: "Unknown",
                 brand: "Apple",

@@ -54,6 +54,11 @@ let package = Package(
                 // This is important for binary frameworks to maintain ABI stability
                 .enableUpcomingFeature("BareSlashRegexLiterals")
             ]
+        ),
+        .testTarget(
+            name: "LinkrunnerKitTests",
+            dependencies: ["LinkrunnerKit"],
+            path: "Tests/LinkrunnerKitTests"
         )
     ],
     swiftLanguageVersions: [.v5]

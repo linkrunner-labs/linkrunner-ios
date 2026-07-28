@@ -6,7 +6,7 @@ import GoogleAdsOnDeviceConversion
 
 /// Outcome of a single ODM fetch attempt. Carries no payload — the value itself is
 /// returned separately and must never be logged or used as a metric label.
-public enum ODMFetchResult: String, Sendable {
+enum ODMFetchResult: String, Sendable {
     case success
     case empty
     case error
@@ -15,10 +15,10 @@ public enum ODMFetchResult: String, Sendable {
 }
 
 /// Diagnostics for one fetch attempt. Deliberately excludes the raw value.
-public struct ODMDiagnostics: Sendable {
-    public let available: Bool
-    public let result: ODMFetchResult
-    public let latencyMs: Int
+struct ODMDiagnostics: Sendable {
+    let available: Bool
+    let result: ODMFetchResult
+    let latencyMs: Int
 }
 
 /// Wraps Google's On-Device Measurement SDK, which supplies the opaque `odm_info`
@@ -36,6 +36,11 @@ final class ODMService: @unchecked Sendable {
     /// Cached values are scoped to an install instance so a reinstall never reuses
     /// the previous install's `odm_info`. See `cacheKey(for:)`.
     private static let ODM_INFO_KEY_PREFIX = "linkrunner_odm_info_"
+
+    /// Holds the key of the currently-cached entry, so a superseded one can be removed
+    /// without scanning every key in the domain. Deliberately outside
+    /// `ODM_INFO_KEY_PREFIX` so it can never collide with a cache entry.
+    private static let ODM_CURRENT_POINTER_KEY = "linkrunner_odm_current_key"
 
     private init() {}
 
@@ -157,14 +162,16 @@ final class ODMService: @unchecked Sendable {
             let defaults = UserDefaults.standard
             let key = self.cacheKey(for: installInstanceId)
 
-            // Drop entries belonging to superseded install instances. Without this,
-            // every reinstall leaves an orphaned value behind in UserDefaults.
-            for existing in defaults.dictionaryRepresentation().keys
-            where existing.hasPrefix(ODMService.ODM_INFO_KEY_PREFIX) && existing != key {
-                defaults.removeObject(forKey: existing)
+            // Drop the entry from a superseded install instance, so a reinstall doesn't
+            // leave an orphaned value behind. Tracked by a single pointer key rather than
+            // scanning UserDefaults, which would enumerate the whole domain.
+            let previousKey = defaults.string(forKey: ODMService.ODM_CURRENT_POINTER_KEY)
+            if let previousKey = previousKey, previousKey != key {
+                defaults.removeObject(forKey: previousKey)
             }
 
             defaults.set(info, forKey: key)
+            defaults.set(key, forKey: ODMService.ODM_CURRENT_POINTER_KEY)
         }
     }
 }
