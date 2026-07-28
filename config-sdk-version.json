@@ -1,0 +1,144 @@
+{
+  "sdk": "IOS",
+  "package": "linkrunner-ios",
+  "latest_version": "4.1.0",
+  "total_versions": 26,
+  "source": "version and description from Postgres public.\"SDKVersion\"; pushed_date from the package registry publish date, falling back to CHANGELOG.md, git tags, then manifest history",
+  "version_source": {
+    "file": "LinkrunnerKit.podspec",
+    "type": "podspec"
+  },
+  "version_mirrors": [],
+  "sdk_versions": [
+    {
+      "version": "4.1.0",
+      "pushed_date": "2026-07-27",
+      "description": "Added Google Integrated Conversion Measurement (ICM) via the on-device measurement SDK, a consent model for Google Ads, and opt-in IAB TCF consent collection."
+    },
+    {
+      "version": "4.0.1",
+      "pushed_date": "2026-07-09",
+      "description": "Exposed ad-network campaign, ad set, and creative identifiers and names in attribution responses."
+    },
+    {
+      "version": "4.0.0",
+      "pushed_date": "2026-06-30",
+      "description": "Made paymentId mandatory for payment capture and rejected missing or whitespace-only values."
+    },
+    {
+      "version": "3.11.0",
+      "pushed_date": "2026-06-19",
+      "description": "Added setCustomerUserId, which persists the application user ID and automatically includes it with subsequent tracked events."
+    },
+    {
+      "version": "3.10.0",
+      "pushed_date": "2026-04-03",
+      "description": "Added handleDeeplink support for deeplink-based re-engagement attribution."
+    },
+    {
+      "version": "3.9.0",
+      "pushed_date": "2026-03-21",
+      "description": "Added Netcore device GUID support to signup and user-data requests."
+    },
+    {
+      "version": "3.8.0",
+      "pushed_date": "2026-02-24",
+      "description": "Added optional event data to payment capture and support for Meta Commerce Event Manager."
+    },
+    {
+      "version": "3.7.1",
+      "pushed_date": "2026-02-02",
+      "description": "Added Google Analytics session ID collection so Linkrunner events can be correlated with analytics sessions."
+    },
+    {
+      "version": "3.7.0",
+      "pushed_date": "2025-12-16",
+      "description": "Added automatic Apple AdServices attribution-token collection for iOS 14.3 and later."
+    },
+    {
+      "version": "3.6.0",
+      "pushed_date": "2025-11-05",
+      "description": "Added event IDs to custom-event requests and improved payment input handling."
+    },
+    {
+      "version": "3.5.0",
+      "pushed_date": "2025-11-04",
+      "description": "Added Google Analytics app instance ID and Braze device ID fields for linking Linkrunner users with analytics profiles."
+    },
+    {
+      "version": "3.4.0",
+      "pushed_date": "2025-10-27",
+      "description": "Added an API to register or update a device push token for uninstall tracking and messaging integrations."
+    },
+    {
+      "version": "3.3.0",
+      "pushed_date": "2025-09-26",
+      "description": "Added exponential-backoff API retries, non-blocking public error handling, and backward-compatible error responses."
+    },
+    {
+      "version": "3.2.0",
+      "pushed_date": "2025-09-10",
+      "description": "Added the SECOND_PAYMENT payment type and updated install-time handling."
+    },
+    {
+      "version": "3.1.0",
+      "pushed_date": "2025-09-04",
+      "description": "Added SKAdNetwork conversion handling, iOS 17.4 support, and application install-time tracking."
+    },
+    {
+      "version": "3.0.2",
+      "pushed_date": "2025-06-27",
+      "description": "Added a debug option to SDK initialization and initialization API requests."
+    },
+    {
+      "version": "3.0.1",
+      "pushed_date": "2025-06-27",
+      "description": "Corrected Swift package module-map placement and package configuration."
+    },
+    {
+      "version": "3.0.0",
+      "pushed_date": "2025-06-26",
+      "description": "Introduced the LinkrunnerKit package identity and dictionary conversion for campaign and attribution models."
+    },
+    {
+      "version": "2.1.0",
+      "pushed_date": "2025-06-12",
+      "description": "Added the option to disable IDFA collection during SDK initialization."
+    },
+    {
+      "version": "2.0.0",
+      "pushed_date": "2025-06-11",
+      "description": "Added attribution retrieval, flexible integration data, additional user properties, and HMAC request signing."
+    },
+    {
+      "version": "1.0.6",
+      "pushed_date": "2025-05-19",
+      "description": "Added Codable and type-safe API models plus optional SHA-256 hashing for user data."
+    },
+    {
+      "version": "1.0.5",
+      "pushed_date": "2025-05-17",
+      "description": "Improved network-monitoring thread safety to prevent concurrent access issues during connection-state updates."
+    },
+    {
+      "version": "1.0.4",
+      "pushed_date": "2025-05-17",
+      "description": "Fixed a network-monitoring initialization race and improved connection-type handling."
+    },
+    {
+      "version": "1.0.3",
+      "pushed_date": "2025-05-17",
+      "description": "Added real-time network monitoring, a Sendable device-data model, and XCFramework build support."
+    },
+    {
+      "version": "1.0.1",
+      "pushed_date": "2025-05-16",
+      "description": "Optimized async device-data collection by caching UIDevice and screen properties."
+    },
+    {
+      "version": "1.0.0",
+      "pushed_date": "2025-05-16",
+      "description": "Initial native iOS SDK release with Swift Package Manager and CocoaPods integration."
+    }
+  ]
+}
