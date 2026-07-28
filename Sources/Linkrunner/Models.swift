@@ -49,8 +49,15 @@ extension SendableDictionary: @unchecked Sendable {}
 /// value is known", so an unknown value is omitted from the request rather than
 /// guessed. Never map `unknown` to `granted`.
 public enum ConsentStatus: String, Sendable {
+    /// The user gave consent. Sent to Google as `1`.
     case granted
+    /// The user refused consent. Sent to Google as `0`.
     case denied
+    /// You do not know the user's choice — they have not been asked yet, your CMP has
+    /// not resolved, or the signal does not apply. **Omitted from the request entirely**,
+    /// so Google can tell "we were never told" apart from "the user said no".
+    ///
+    /// This is the default. Leaving a signal `unknown` is always safer than guessing.
     case unknown
 
     /// Wire form: `"1"`, `"0"`, or `nil` when unknown (the parameter is then omitted).
@@ -85,11 +92,53 @@ public struct LinkrunnerConsent: Sendable, Equatable {
     ///
     /// The name mirrors the wire key and Google's own `eea` parameter.
     public let isEEA: ConsentStatus
-    /// Consent to send user data to Google for advertising purposes — sent as `ad_user_data`.
+    /// Whether the user consented to their data being **sent to Google** for advertising
+    /// purposes. Sent as `ad_user_data`.
+    ///
+    /// This governs transmission: may we share this user's data with Google at all.
+    /// Without it Google cannot attribute the conversion to a campaign, so a denial
+    /// generally means the install is not measurable through Google.
+    ///
+    /// Typically maps to your CMP's "share data with advertising partners" choice, or
+    /// TCF purposes 1 and 7.
+    ///
+    /// Not the same as ATT: a user can allow tracking at the iOS level and still refuse
+    /// this, or vice versa.
     public let hasConsentForDataUsage: ConsentStatus
-    /// Consent to use the data for ad personalization — sent as `ad_personalization`.
+
+    /// Whether the user consented to their data being used to **personalize ads**.
+    /// Sent as `ad_personalization`.
+    ///
+    /// This governs use rather than transmission: Google may still measure the
+    /// conversion, but may not use the data to build a profile or target ads. Denying
+    /// this while granting ``hasConsentForDataUsage`` is a normal, common combination.
+    ///
+    /// Typically maps to your CMP's "personalized advertising" choice, or TCF
+    /// purposes 3 and 4.
     public let hasConsentForAdsPersonalization: ConsentStatus
 
+    /// Creates a consent state to hand to `LinkrunnerSDK.shared.setConsent(_:)`.
+    ///
+    /// Every parameter defaults to `.unknown`, so you can supply only what you actually
+    /// know — omitted signals are left out of the payload rather than guessed at.
+    ///
+    /// ```swift
+    /// LinkrunnerSDK.shared.setConsent(LinkrunnerConsent(
+    ///     isEEA: .granted,
+    ///     hasConsentForDataUsage: .granted,
+    ///     hasConsentForAdsPersonalization: .denied
+    /// ))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - isEEA: Whether **European regulations apply** to this user — the EEA, the
+    ///     United Kingdom *or* Switzerland. Broader than GDPR alone, and it is exactly
+    ///     the population Integrated Conversion Measurement covers. Sent as `is_eea`.
+    ///   - hasConsentForDataUsage: Whether the user consented to their data being **sent
+    ///     to Google** for advertising. Governs transmission. Sent as `ad_user_data`.
+    ///   - hasConsentForAdsPersonalization: Whether the user consented to their data
+    ///     being used to **personalize ads**. Governs use, not transmission, so denying
+    ///     it while granting data usage is normal. Sent as `ad_personalization`.
     public init(
         isEEA: ConsentStatus = .unknown,
         hasConsentForDataUsage: ConsentStatus = .unknown,
