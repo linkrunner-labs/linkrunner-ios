@@ -4,8 +4,9 @@ name: SDK version check
 # latest entry in config-sdk-version.json. PRs that do not change the SDK
 # version are unaffected.
 #
-# NOTE: for this to actually prevent a merge, add "SDK version check" as a
-# required status check in the branch protection rules for main.
+# Runs on macOS because the checker is a Swift script and Swift ships with
+# Xcode. NOTE: for this to actually prevent a merge, add "SDK version check"
+# as a required status check in the branch protection rules for main.
 
 on:
   pull_request:
@@ -17,13 +18,9 @@ on:
 jobs:
   sdk-version:
     name: SDK version check
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Verify the SDK version is recorded in config-sdk-version.json
-        run: python3 Scripts/check-sdk-version.py
+        run: swift Scripts/check-sdk-version.swift
