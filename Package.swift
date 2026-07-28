@@ -24,11 +24,26 @@ let package = Package(
             targets: ["LinkrunnerKit"]
         )
     ],
-    dependencies: [],
+    dependencies: [
+        // Google On-Device Measurement (ODM) — produces the opaque `odm_info` value
+        // required by Google Integrated Conversion Measurement on iOS.
+        // Pinned to the minor: Google ships the GA4F compatibility table per minor
+        // (see README), and mismatches surface as build/runtime failures in apps
+        // that also pull ODM transitively via Firebase Analytics.
+        .package(
+            url: "https://github.com/googleads/google-ads-on-device-conversion-ios-sdk.git",
+            .upToNextMinor(from: "3.6.1")
+        )
+    ],
     targets: [
         .target(
             name: "LinkrunnerKit",
-            dependencies: [],
+            dependencies: [
+                .product(
+                    name: "GoogleAdsOnDeviceConversion",
+                    package: "google-ads-on-device-conversion-ios-sdk"
+                )
+            ],
             path: "Sources/Linkrunner",
             exclude: ["include"],
             cSettings: [

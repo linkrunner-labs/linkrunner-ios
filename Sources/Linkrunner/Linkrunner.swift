@@ -30,6 +30,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
     // Define a Sendable device data structure
     private struct DeviceData: Sendable {
         var device: String
+        /// Hardware model identifier, e.g. "iPhone17,3". Distinct from `device`, which
+        /// is the generic family string ("iPhone") that UIDevice reports. Google's
+        /// User-Agent spec requires the identifier form, and it cannot be derived
+        /// server-side from anything else in the payload.
+        var deviceModelIdentifier: String?
         var deviceName: String
         var systemVersion: String
         var brand: String
@@ -49,7 +54,13 @@ public class LinkrunnerSDK: @unchecked Sendable {
         var userAgent: String?
         var installInstanceId: String
         var adservicesAttributionToken: String?
-        
+        /// Opaque Google ODM value. Never logged.
+        var odmInfo: String?
+        /// Seconds since epoch, microsecond precision, matching Google's `fot` contract.
+        var firstOpenTimestamp: Double?
+        var attStatus: String?
+        var consent: LinkrunnerConsent?
+
         struct DisplayData: Sendable {
             var width: Double
             var height: Double
@@ -73,6 +84,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
                 "install_instance_id": installInstanceId
             ]
             
+            if let deviceModelIdentifier = deviceModelIdentifier { dict["device_model"] = deviceModelIdentifier }
             if let bundleId = bundleId { dict["bundle_id"] = bundleId }
             if let appVersion = appVersion { dict["version"] = appVersion }
             if let buildNumber = buildNumber { dict["build_number"] = buildNumber }
@@ -85,7 +97,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
             if let timezoneOffset = timezoneOffset { dict["timezone_offset"] = timezoneOffset }
             if let userAgent = userAgent { dict["user_agent"] = userAgent }
             if let adservicesAttributionToken = adservicesAttributionToken { dict["adservices_attribution_token"] = adservicesAttributionToken }
-            
+            if let odmInfo = odmInfo { dict["odm_info"] = odmInfo }
+            if let firstOpenTimestamp = firstOpenTimestamp { dict["first_open_timestamp"] = firstOpenTimestamp }
+            if let attStatus = attStatus { dict["att_status"] = attStatus }
+            if let consent = consent, !consent.isEmpty { dict["consent"] = consent.toDictionary() }
+
             return dict
         }
     }
@@ -99,9 +115,31 @@ public class LinkrunnerSDK: @unchecked Sendable {
     private var token: String?
     private var secretKey: String?
     private var keyId: String?
-    
+
     // Time tracking for SKAN
     private var appInstallTime: Date?
+
+    // Google Ads consent, supplied by the host app's CMP. Restored from storage on first
+    // access so a returning user keeps their state without the app re-supplying it.
+    // Defaults to all-unknown, reported as "not known" rather than assumed permissive.
+    private lazy var consent: LinkrunnerConsent = LinkrunnerSDK.loadPersistedConsent()
+
+    /// When enabled, consent is read from an IAB TCF CMP's `IABTCF_*` keys for any
+    /// signal the app has not set explicitly. Opt-in — see `enableTCFConsentCollection`.
+    private var tcfConsentCollectionEnabled = false
+
+    /// Resolved once during `initialize` and reused for every subsequent payload.
+    /// Never logged — see ODMService.
+    private var odmInfo: String?
+
+    /// AdServices attribution token, cached for the process. Previously re-fetched on
+    /// every request, which meant a synchronous `AAAttribution.attributionToken()` call
+    /// on each network call rather than once per install.
+    private var cachedAttributionToken: String?
+
+    /// Upper bound on the ODM fetch during `initialize`. Google publishes no latency
+    /// figure; this is our own bound, and should be tuned from measured p95.
+    private static let ODM_FETCH_TIMEOUT: TimeInterval = 5.0
     
     // Request signing configuration
     private let requestInterceptor = RequestSigningInterceptor()
@@ -165,6 +203,63 @@ public class LinkrunnerSDK: @unchecked Sendable {
         requestInterceptor.reset()
     }
     
+    /// Set the Google Ads consent state.
+    ///
+    /// Call it before `initialize` so the first payload carries the correct state, and
+    /// call it again whenever your CMP state changes — the new values replace the old
+    /// ones and apply to every subsequent payload.
+    ///
+    /// The values are persisted, so a returning user keeps their consent state without
+    /// the app having to re-supply it on every launch. Anything left `.unknown` is
+    /// reported as unknown rather than assumed granted, and is omitted from the payload.
+    ///
+    /// - Parameter consent: consent signals from your Consent Management Platform
+    public func setConsent(_ consent: LinkrunnerConsent) {
+        guard consent != self.consent else { return }
+        self.consent = consent
+        persistConsent(consent)
+    }
+
+    /// Collect Google Ads consent automatically from an IAB TCF v2.2/2.3 Consent
+    /// Management Platform.
+    ///
+    /// When enabled, the SDK reads the CMP's standard `IABTCF_*` keys and derives
+    /// `isUserSubjectToGDPR`, `hasConsentForDataUsage` and `hasConsentForAdsPersonalization`
+    /// using Google's published TCF mapping. Call it before `initialize` so the first
+    /// payload carries consent.
+    ///
+    /// Anything set explicitly via `setConsent` takes precedence over the TCF value,
+    /// per signal — so you can let the CMP supply most of it and override one field.
+    /// Signals the CMP has not written stay `.unknown` and are omitted from the payload.
+    ///
+    /// This is opt-in rather than automatic because interpreting a TC string on your
+    /// behalf is a legal judgement. Only enable it if you use a TCF-compliant CMP;
+    /// custom consent screens and Firebase Consent Mode do not write these keys.
+    ///
+    /// - Parameter enabled: whether to read consent from the TCF CMP
+    public func enableTCFConsentCollection(_ enabled: Bool = true) {
+        self.tcfConsentCollectionEnabled = enabled
+    }
+
+    /// Merges explicitly-set consent over TCF-derived consent, per signal.
+    ///
+    /// Read fresh on every payload rather than snapshotted at init: on first launch the
+    /// CMP may not have resolved yet, so an early read would pin `.unknown` for the
+    /// life of the process.
+    private func resolveConsent() -> LinkrunnerConsent {
+        guard tcfConsentCollectionEnabled else { return consent }
+
+        let tcf = TCFConsent.read()
+        // Explicit values win; fall back to TCF only where the app said nothing.
+        return LinkrunnerConsent(
+            isUserSubjectToGDPR: consent.isUserSubjectToGDPR == .unknown ? tcf.isUserSubjectToGDPR : consent.isUserSubjectToGDPR,
+            hasConsentForDataUsage: consent.hasConsentForDataUsage == .unknown ? tcf.hasConsentForDataUsage : consent.hasConsentForDataUsage,
+            hasConsentForAdsPersonalization: consent.hasConsentForAdsPersonalization == .unknown
+                ? tcf.hasConsentForAdsPersonalization
+                : consent.hasConsentForAdsPersonalization
+        )
+    }
+
     /// Initialize the Linkrunner SDK with your project token
     /// - Parameter token: Your Linkrunner project token
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
@@ -172,15 +267,28 @@ public class LinkrunnerSDK: @unchecked Sendable {
         self.token = token
         self.disableIdfa = disableIdfa ?? false
         self.debug = debug ?? false
-        
+
         // Set app install time on first initialization
         if appInstallTime == nil {
             appInstallTime = getAppInstallTime()
-            
+
+            // Hand Google the same persisted install time Linkrunner already uses, so
+            // the value is stable across launches instead of drifting each run.
+            // Must happen before any conversion info is fetched.
+            if let appInstallTime = appInstallTime {
+                ODMService.shared.setFirstLaunchTime(appInstallTime)
+            }
+
             // Initialize SKAN with default values (0/low) on first init
             await SKAdNetworkService.shared.registerInitialConversionValue()
         }
-        
+
+        // Resolve Google ODM before the init call, since that request is what the
+        // backend forwards as `first_open`. Bounded, and never fatal: on empty,
+        // error or timeout we omit `odm_info` and carry on. Initialization must
+        // never permanently depend on Google being reachable.
+        await resolveODMInfo()
+
         // Only set secretKey and keyId when they are provided
         if let secretKey = secretKey, let keyId = keyId, !secretKey.isEmpty, !keyId.isEmpty {
             self.secretKey = secretKey
@@ -808,12 +916,49 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
+    /// Resolve the Google ODM value for this install, if one is available.
+    ///
+    /// Only fetches when we don't already hold a value, so this is effectively
+    /// once-per-install: `ODMService` caches successes against the install instance
+    /// and failures are left uncached so a later launch can retry.
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    private func resolveODMInfo() async {
+        guard odmInfo == nil else { return }
+
+        let installInstanceId = await getLinkRunnerInstallInstanceId()
+        let (info, diagnostics) = await ODMService.shared.resolveInfo(
+            installInstanceId: installInstanceId,
+            timeout: LinkrunnerSDK.ODM_FETCH_TIMEOUT
+        )
+        odmInfo = info
+
+        #if DEBUG
+        // Diagnostics only. The raw value must never be logged, in any build.
+        print("Linkrunner: odm_available=\(diagnostics.available) "
+              + "odm_fetch_result=\(diagnostics.result.rawValue) "
+              + "odm_fetch_latency_ms=\(diagnostics.latencyMs)")
+
+        // TEMP DEBUG ONLY — remove before committing. Logs the raw odm_info value,
+        // which this SDK otherwise deliberately never logs (see comments above).
+        print("Linkrunner [TEMP DEBUG]: raw odm_info=\(info ?? "nil")")
+        #endif
+    }
+
     /// Get attribution token from AdServices framework
+    ///
+    /// Cached for the process: `AAAttribution.attributionToken()` is a synchronous
+    /// call and this runs from `deviceData()`, which every request builds. Fetching
+    /// it per request meant repeating that work on every event and payment call.
+    /// A nil result is not cached, so a token that isn't ready yet is retried.
     /// - Returns: Attribution token string if available, nil otherwise
     private func getAttributionToken() async -> String? {
+        if let cachedAttributionToken = cachedAttributionToken {
+            return cachedAttributionToken
+        }
         #if canImport(AdServices)
         do {
             let token = try AAAttribution.attributionToken()
+            cachedAttributionToken = token
             return token
         } catch {
             #if DEBUG
@@ -821,6 +966,49 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #endif
             return nil
         }
+        #else
+        return nil
+        #endif
+    }
+
+    /// Hardware model identifier, e.g. "iPhone17,3".
+    ///
+    /// `UIDevice.current.model` only returns the generic family ("iPhone"), which is not
+    /// enough for Google's App Conversion API User-Agent — its spec calls for the
+    /// identifier form (`iPhone9,1`). Read from `uname` since there is no UIKit API for it.
+    ///
+    /// On the simulator `uname` reports the host architecture (`arm64`/`x86_64`), so we
+    /// prefer the simulator's own model identifier to keep test payloads meaningful.
+    private func getDeviceModelIdentifier() -> String? {
+        if let simulatorModel = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"],
+           !simulatorModel.isEmpty {
+            return simulatorModel
+        }
+
+        var systemInfo = utsname()
+        guard uname(&systemInfo) == 0 else { return nil }
+
+        let identifier = withUnsafeBytes(of: &systemInfo.machine) { rawBuffer -> String? in
+            let bytes = rawBuffer.prefix { $0 != 0 }
+            return String(bytes: bytes, encoding: .utf8)
+        }
+
+        guard let identifier = identifier, !identifier.isEmpty else { return nil }
+        return identifier
+    }
+
+    /// Current App Tracking Transparency authorization.
+    ///
+    /// Sent as Apple's raw enum value (0 notDetermined, 1 restricted, 2 denied,
+    /// 3 authorized) because that is the established `att_status` wire contract —
+    /// the backend compares against "3" when resolving tracking consent. Do not
+    /// switch this to a descriptive string without changing the consumers.
+    ///
+    /// Reported separately from consent: ATT governs IDFA access and is not
+    /// equivalent to Google's ad user data or ad personalization signals.
+    private func getATTStatus() -> String? {
+        #if canImport(AppTrackingTransparency)
+        return String(ATTrackingManager.trackingAuthorizationStatus.rawValue)
         #else
         return nil
         #endif
@@ -981,7 +1169,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "4.0.1" // Swift package version
+        return "4.1.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
@@ -1074,6 +1262,7 @@ extension LinkrunnerSDK {
             
             return DeviceData(
                 device: deviceModel,
+                deviceModelIdentifier: self.getDeviceModelIdentifier(),
                 deviceName: deviceName,
                 systemVersion: systemVersion,
                 brand: "Apple",
@@ -1092,7 +1281,11 @@ extension LinkrunnerSDK {
                 timezoneOffset: timezoneOffset,
                 userAgent: userAgent,
                 installInstanceId: installInstanceId,
-                adservicesAttributionToken: attributionToken
+                adservicesAttributionToken: attributionToken,
+                odmInfo: self.odmInfo,
+                firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
+                attStatus: self.getATTStatus(),
+                consent: self.resolveConsent()
             )
 #else
             // Fallback for non-UIKit platforms
@@ -1101,6 +1294,7 @@ extension LinkrunnerSDK {
             
             return DeviceData(
                 device: "Unknown",
+                deviceModelIdentifier: self.getDeviceModelIdentifier(),
                 deviceName: "Unknown",
                 systemVersion: "Unknown",
                 brand: "Apple",
@@ -1119,7 +1313,11 @@ extension LinkrunnerSDK {
                 timezoneOffset: nil,
                 userAgent: nil,
                 installInstanceId: await getLinkRunnerInstallInstanceId(),
-                adservicesAttributionToken: attributionToken
+                adservicesAttributionToken: attributionToken,
+                odmInfo: self.odmInfo,
+                firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
+                attStatus: self.getATTStatus(),
+                consent: self.resolveConsent()
             )
 #endif
         }.value
@@ -1202,6 +1400,39 @@ extension LinkrunnerSDK {
         return UserDefaults.standard.string(forKey: LinkrunnerSDK.DEEPLINK_URL_STORAGE_KEY)
     }
     
+    // MARK: - Consent Storage
+
+    private static let CONSENT_IS_EEA_KEY = "linkrunner_consent_is_eea"
+    private static let CONSENT_AD_USER_DATA_KEY = "linkrunner_consent_ad_user_data"
+    private static let CONSENT_AD_PERSONALIZATION_KEY = "linkrunner_consent_ad_personalization"
+
+    /// Reads consent stored by a previous session. Missing keys read back as `.unknown`,
+    /// so an app that has never called `setConsent` is reported as unknown, not granted.
+    fileprivate static func loadPersistedConsent() -> LinkrunnerConsent {
+        let defaults = UserDefaults.standard
+        func status(_ key: String) -> ConsentStatus {
+            guard let raw = defaults.string(forKey: key) else { return .unknown }
+            return ConsentStatus(rawValue: raw) ?? .unknown
+        }
+        return LinkrunnerConsent(
+            isUserSubjectToGDPR: status(CONSENT_IS_EEA_KEY),
+            hasConsentForDataUsage: status(CONSENT_AD_USER_DATA_KEY),
+            hasConsentForAdsPersonalization: status(CONSENT_AD_PERSONALIZATION_KEY)
+        )
+    }
+
+    /// Persists the full triple, replacing whatever was stored before.
+    ///
+    /// `.unknown` is written out rather than skipped: if an app moves a signal back to
+    /// unknown, leaving the old value on disk would keep reporting a choice the user
+    /// no longer has.
+    fileprivate func persistConsent(_ consent: LinkrunnerConsent) {
+        let defaults = UserDefaults.standard
+        defaults.set(consent.isUserSubjectToGDPR.rawValue, forKey: LinkrunnerSDK.CONSENT_IS_EEA_KEY)
+        defaults.set(consent.hasConsentForDataUsage.rawValue, forKey: LinkrunnerSDK.CONSENT_AD_USER_DATA_KEY)
+        defaults.set(consent.hasConsentForAdsPersonalization.rawValue, forKey: LinkrunnerSDK.CONSENT_AD_PERSONALIZATION_KEY)
+    }
+
     // MARK: - App Install Time Tracking
     
     private static let APP_INSTALL_TIME_KEY = "linkrunner_app_install_time"
