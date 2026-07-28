@@ -1,0 +1,28 @@
+name: Build
+
+# Builds the SDK for iOS with xcodebuild.
+#
+# Deliberately NOT `swift build`: that targets the host (macOS), and this
+# package declares .iOS(.v15) only, so SwiftPM falls back to an old macOS
+# target and fails against GoogleAdsOnDeviceConversion, which needs macOS 10.15.
+# Building for a generic iOS destination is what actually reflects consumers.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build for iOS
+        run: |
+          xcodebuild -scheme LinkrunnerKit \
+            -destination 'generic/platform=iOS' \
+            -quiet build
