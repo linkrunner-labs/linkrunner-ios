@@ -40,6 +40,88 @@ extension LinkrunnerError: LocalizedError {
 public typealias SendableDictionary = [String: Any] 
 extension SendableDictionary: @unchecked Sendable {}
 
+// MARK: - Consent
+
+/// Tri-state consent signal for Google Ads.
+///
+/// `unknown` is a distinct state, not a synonym for `denied` or `granted`. Google's
+/// App Conversion API treats the consent parameters as "required to be sent when the
+/// value is known", so an unknown value is omitted from the request rather than
+/// guessed. Never map `unknown` to `granted`.
+public enum ConsentStatus: String, Sendable {
+    /// The user gave consent. Sent to Google as `1`.
+    case granted
+    /// The user refused consent. Sent to Google as `0`.
+    case denied
+    /// The user's choice is not known. Omitted from the request rather than sent as a
+    /// denial. This is the default.
+    case unknown
+
+    /// Wire form: `"1"`, `"0"`, or `nil` when unknown (the parameter is then omitted).
+    var wireValue: String? {
+        switch self {
+        case .granted: return "1"
+        case .denied: return "0"
+        case .unknown: return nil
+        }
+    }
+}
+
+/// Google Ads consent state, normally sourced from your Consent Management Platform.
+///
+/// Set it with `LinkrunnerSDK.shared.setConsent(_:)` before `initialize`, and call the
+/// same method again whenever your CMP state changes. Defaults to all-`unknown`,
+/// which is reported honestly rather than assumed permissive.
+///
+/// ATT authorization is *not* equivalent to either of these signals — it governs
+/// IDFA access, not Google's use of ad user data or personalization. The SDK reports
+/// ATT status separately.
+public struct LinkrunnerConsent: Sendable, Equatable {
+    /// Whether European regulations apply to this user — the EEA, the United Kingdom or
+    /// Switzerland. Sent to Google as `is_eea`.
+    public let isEEA: ConsentStatus
+
+    /// Whether the user consented to their data being sent to Google for advertising
+    /// purposes. Sent as `ad_user_data`.
+    public let hasConsentForDataUsage: ConsentStatus
+
+    /// Whether the user consented to their data being used to personalize ads.
+    /// Sent as `ad_personalization`.
+    public let hasConsentForAdsPersonalization: ConsentStatus
+
+    /// - Parameters:
+    ///   - isEEA: Whether European regulations apply to this user — the EEA, the United
+    ///     Kingdom or Switzerland. Sent as `is_eea`.
+    ///   - hasConsentForDataUsage: Whether the user consented to their data being sent to
+    ///     Google for advertising purposes. Sent as `ad_user_data`.
+    ///   - hasConsentForAdsPersonalization: Whether the user consented to their data being
+    ///     used to personalize ads. Sent as `ad_personalization`.
+    public init(
+        isEEA: ConsentStatus = .unknown,
+        hasConsentForDataUsage: ConsentStatus = .unknown,
+        hasConsentForAdsPersonalization: ConsentStatus = .unknown
+    ) {
+        self.isEEA = isEEA
+        self.hasConsentForDataUsage = hasConsentForDataUsage
+        self.hasConsentForAdsPersonalization = hasConsentForAdsPersonalization
+    }
+
+    /// Omits any signal that is `unknown`, so the backend can distinguish
+    /// "user said no" from "we were never told".
+    func toDictionary() -> SendableDictionary {
+        var dict: SendableDictionary = [:]
+        if let isEEA = isEEA.wireValue { dict["is_eea"] = isEEA }
+        if let adUserData = hasConsentForDataUsage.wireValue { dict["ad_user_data"] = adUserData }
+        if let adPersonalization = hasConsentForAdsPersonalization.wireValue { dict["ad_personalization"] = adPersonalization }
+        return dict
+    }
+
+    /// True when nothing is known, in which case the key is dropped entirely.
+    var isEmpty: Bool {
+        return isEEA == .unknown && hasConsentForDataUsage == .unknown && hasConsentForAdsPersonalization == .unknown
+    }
+}
+
 // MARK: - Model Types
 
 public struct UserData: Sendable {
