@@ -30,17 +30,15 @@ That's the whole integration. LinkrunnerKit picks it up automatically on the nex
 
 ### Linker flags
 
-Add this to **Build Settings → Other Linker Flags** on your app target:
+**CocoaPods: nothing to do.** CocoaPods adds `-ObjC` and `-lc++` to your target automatically when it links Google's static framework.
+
+**Swift Package Manager and manual integration:** add this to **Build Settings → Other Linker Flags** on your app target:
 
 ```
 -ObjC
 ```
 
-**This is required regardless of how you added the SDK**, including CocoaPods. LinkrunnerKit finds Google's class through the Objective-C runtime rather than importing it, so nothing references it at link time. Google ships a static library, and linkers only pull in static-library members that something references. Without `-ObjC` the class is stripped, the lookup finds nothing, and ICM silently does nothing while your build succeeds.
-
-`-lc++` is applied for you (Google's podspec declares `libraries: c++`, and their `Package.swift` sets the equivalent linker setting), so you do not need to add it. Adding it anyway is harmless.
-
-Branch and Adjust require the same `-ObjC` flag for the same reason.
+LinkrunnerKit finds Google's class through the Objective-C runtime rather than importing it, so nothing references it at link time. Google ships a static library, and linkers only keep static-library members that something references. Without `-ObjC` the class is stripped, the lookup finds nothing, and ICM silently does nothing while your build still succeeds. `-lc++` is applied for you by Google's `Package.swift`.
 
 ### Verifying it is active
 
@@ -50,7 +48,7 @@ With `debug: true`, initialization logs:
 Linkrunner: odm_available=true odm_fetch_result=success odm_fetch_latency_ms=…
 ```
 
-`odm_available=false` with `odm_fetch_result=unavailable` means either Google's SDK is not linked or `-ObjC` is missing. The second is the more likely cause, since it produces no build warning. The raw `odm_info` value is never logged.
+`odm_available=false` with `odm_fetch_result=unavailable` means Google's SDK is not linked. On Swift Package Manager, check that `-ObjC` is set, since a missing flag strips the class with no build warning. The raw `odm_info` value is never logged.
 
 ### Scope
 
