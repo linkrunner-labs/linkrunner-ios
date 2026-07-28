@@ -8,47 +8,51 @@ For setup instructions, usage examples, and API reference, please visit:
 
 [Linkrunner iOS SDK Documentation](https://docs.linkrunner.io/sdk/ios/installation)
 
-## Google On-Device Measurement (ODM)
+## Google Integrated Conversion Measurement (ICM)
 
-From 4.1.0 LinkrunnerKit depends on [`GoogleAdsOnDeviceConversion`](https://github.com/googleads/google-ads-on-device-conversion-ios-sdk), which supplies the `odm_info` value used by Google Integrated Conversion Measurement.
+ICM improves Google App Campaign attribution when no click identifier or advertising ID is available. It needs Google's [On-Device Measurement SDK](https://github.com/googleads/google-ads-on-device-conversion-ios-sdk), which produces the `odm_info` value LinkrunnerKit forwards.
+
+**LinkrunnerKit does not bundle that SDK.** It is detected at runtime, so if you don't use ICM you carry none of its weight — no extra dependency, no change to how LinkrunnerKit links, no size increase. This matches how Branch and Kochava integrate the same SDK.
+
+### Opting in
+
+Add Google's SDK to your app. If you already use the Firebase iOS SDK (11.14.0+) you have it — nothing further to do.
+
+**CocoaPods**
+
+```ruby
+pod 'GoogleAdsOnDeviceConversion'
+```
+
+**Swift Package Manager** — add `https://github.com/googleads/google-ads-on-device-conversion-ios-sdk` and select the `GoogleAdsOnDeviceConversion` product.
+
+That's the whole integration. LinkrunnerKit picks it up automatically on the next launch; there is no API to call.
 
 ### Linker flags
 
-The Google framework requires two flags in **Other Linker Flags** on your app target:
+Google's framework needs these in **Other Linker Flags** on your app target:
 
 ```
 -ObjC -lc++
 ```
 
-CocoaPods applies these for you. Swift Package Manager and manual integrations must add them.
+CocoaPods applies them when you add the pod. SPM and manual integrations must add them yourself.
 
-### Version compatibility with Firebase Analytics
+### Verifying it is active
 
-If your app also uses Firebase Analytics (GA4F) 11.14.0+, it already pulls `GoogleAdsOnDeviceConversion` transitively. The two must agree or you will hit build or runtime failures. Google's compatibility table:
+With `debug: true`, initialization logs:
 
-| GA4F SDK | GoogleAdsOnDeviceConversion |
-| --- | --- |
-| 12.16.0 | 3.6.1 |
-| 12.15.0 | 3.6.0 |
-| 12.14.0 | 3.6.0 |
-| 12.13.0 | 3.5.0 |
-| 12.12.1 | 3.5.0 |
-| 12.12.0 | 3.4.0 |
-| 12.11.0 | 3.4.0 |
-| 12.10.0 | 3.3.0 |
-| 12.5.0 – 12.9.0 | 3.2.0 |
-| 12.4.0 | 3.1.0 |
-| 12.3.0 | 3.0.0 |
-| 12.2.0 | 2.3.0 |
-| 12.1.0 | 2.2.0 |
-| 11.15.0 – 12.0.0 | 2.1.0 |
-| 11.14.0 | 2.0.0 |
+```
+Linkrunner: odm_available=true odm_fetch_result=success odm_fetch_latency_ms=…
+```
 
-LinkrunnerKit pins `~> 3.6`. If you need a different version, override the dependency in your `Podfile` or `Package.swift` to match your GA4F version.
+`odm_available=false` with `odm_fetch_result=unavailable` means Google's SDK is not linked. The raw `odm_info` value is never logged.
 
 ### Scope
 
-ODM applies to the European Economic Area, the United Kingdom and Switzerland. Elsewhere no value is produced and the SDK simply omits the field. ODM does not require ATT authorization or IDFA.
+ICM applies to the European Economic Area, the United Kingdom and Switzerland. Elsewhere Google may return no value and the field is simply omitted. ODM requires neither ATT authorization nor IDFA.
+
+For EEA/UK/Swiss users you should also supply consent via `setConsent(_:)` or `enableTCFConsentCollection(true)` — without it consent is reported as unknown, which limits attribution.
 
 ## License
 

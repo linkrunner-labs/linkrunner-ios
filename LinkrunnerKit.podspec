@@ -15,10 +15,11 @@ Pod::Spec.new do |s|
   s.frameworks       = 'Foundation', 'UIKit', 'Network'
   s.module_name      = 'LinkrunnerKit'
 
-  # Google On-Device Measurement — supplies `odm_info` for Integrated Conversion
-  # Measurement. Apps already on Firebase Analytics 11.14.0+ get this transitively;
-  # see the GA4F compatibility table in the README before changing this constraint.
-  s.dependency 'GoogleAdsOnDeviceConversion', '~> 3.6'
+  # No dependency on GoogleAdsOnDeviceConversion: it is detected at runtime (see
+  # ODMService), so apps that do not use Integrated Conversion Measurement are
+  # unaffected. Apps that want ICM add `pod 'GoogleAdsOnDeviceConversion'` themselves,
+  # or already have it via the Firebase iOS SDK. Keeping it out also avoids forcing
+  # `static_framework` on every consumer, since Google ships a static binary.
 
   # Make it a pure Swift module without Objective-C bridging
   s.pod_target_xcconfig = {
@@ -26,10 +27,4 @@ Pod::Spec.new do |s|
     'SWIFT_INSTALL_OBJC_HEADER' => 'NO'
   }
 
-  # Required by GoogleAdsOnDeviceConversion: -ObjC so the linker loads the
-  # framework's Objective-C classes and categories, -lc++ for its C++ runtime.
-  # These must reach the app target, not just this pod.
-  s.user_target_xcconfig = {
-    'OTHER_LDFLAGS' => '-ObjC -lc++'
-  }
 end

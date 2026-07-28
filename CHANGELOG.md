@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Google Integrated Conversion Measurement (ICM)**: the SDK now integrates Google's On-Device Measurement (ODM) SDK and forwards the resulting `odm_info` value to Linkrunner, enabling Google App Campaign attribution when no click identifier or advertising ID is available. Applies to the EEA, UK and Switzerland.
-  - Adds a dependency on `GoogleAdsOnDeviceConversion` (`~> 3.6`). Apps already using Firebase Analytics 11.14.0+ receive this transitively — see the README compatibility table.
-  - Requires `-ObjC` and `-lc++` in Other Linker Flags. CocoaPods applies these automatically; manual integrators must add them.
-  - No API change is required to adopt ICM: the fetch runs automatically during `initialize`, bounded by a 5 second timeout, and is skipped silently when unavailable.
+- **Google Integrated Conversion Measurement (ICM)**: the SDK now forwards Google's On-Device Measurement `odm_info` value to Linkrunner, enabling Google App Campaign attribution when no click identifier or advertising ID is available. Applies to the EEA, UK and Switzerland.
+  - **LinkrunnerKit remains dependency-free.** Google's SDK is detected at runtime, so apps that do not use ICM are entirely unaffected — no new dependency, no change to linkage, no size increase.
+  - To opt in, add `GoogleAdsOnDeviceConversion` to your app (via CocoaPods, SPM, or the Firebase iOS SDK 11.14.0+, which already includes it) and add `-ObjC -lc++` to Other Linker Flags. See the README.
+  - No API change is required: the fetch runs automatically during `initialize`, bounded by a 5 second timeout, and is skipped silently when Google's SDK is absent.
 - **Consent model** for Google Ads: `LinkrunnerConsent` carries `isEEA`, `hasConsentForDataUsage` and `hasConsentForAdsPersonalization` as `granted` / `denied` / `unknown`. Call `setConsent(_:)` before `initialize`, and call it again whenever your CMP state changes — the new values replace the old ones. Unknown is never reported as granted.
   - Consent is persisted, so a returning user keeps their state without the app re-supplying it every launch. Because it persists, **you must call `setConsent(_:)` again whenever the user changes their choice** — otherwise the previous value keeps being sent after they have withdrawn it.
 - **Automatic consent collection from an IAB TCF CMP.** Call `enableTCFConsentCollection(true)` and the SDK derives consent from the CMP's standard `IABTCF_*` keys, using Google's published TCF mapping — `ad_user_data` from purposes 1 and 7, `ad_personalization` from purposes 3 and 4, both gated on vendor consent for Google (TCF vendor 755). Anything set explicitly via `setConsent` still wins, per signal.
