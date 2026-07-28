@@ -234,7 +234,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Management Platform.
     ///
     /// When enabled, the SDK reads the CMP's standard `IABTCF_*` keys and derives
-    /// `isUserSubjectToGDPR`, `hasConsentForDataUsage` and `hasConsentForAdsPersonalization`
+    /// `isEEA`, `hasConsentForDataUsage` and `hasConsentForAdsPersonalization`
     /// using Google's published TCF mapping. Call it before `initialize` so the first
     /// payload carries consent.
     ///
@@ -262,7 +262,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         let tcf = TCFConsent.read()
         // Explicit values win; fall back to TCF only where the app said nothing.
         return LinkrunnerConsent(
-            isUserSubjectToGDPR: consent.isUserSubjectToGDPR == .unknown ? tcf.isUserSubjectToGDPR : consent.isUserSubjectToGDPR,
+            isEEA: consent.isEEA == .unknown ? tcf.isEEA : consent.isEEA,
             hasConsentForDataUsage: consent.hasConsentForDataUsage == .unknown ? tcf.hasConsentForDataUsage : consent.hasConsentForDataUsage,
             hasConsentForAdsPersonalization: consent.hasConsentForAdsPersonalization == .unknown
                 ? tcf.hasConsentForAdsPersonalization
@@ -1425,7 +1425,7 @@ extension LinkrunnerSDK {
             return ConsentStatus(rawValue: raw) ?? .unknown
         }
         return LinkrunnerConsent(
-            isUserSubjectToGDPR: status(CONSENT_IS_EEA_KEY),
+            isEEA: status(CONSENT_IS_EEA_KEY),
             hasConsentForDataUsage: status(CONSENT_AD_USER_DATA_KEY),
             hasConsentForAdsPersonalization: status(CONSENT_AD_PERSONALIZATION_KEY)
         )
@@ -1438,7 +1438,7 @@ extension LinkrunnerSDK {
     /// no longer has.
     fileprivate func persistConsent(_ consent: LinkrunnerConsent) {
         let defaults = UserDefaults.standard
-        defaults.set(consent.isUserSubjectToGDPR.rawValue, forKey: LinkrunnerSDK.CONSENT_IS_EEA_KEY)
+        defaults.set(consent.isEEA.rawValue, forKey: LinkrunnerSDK.CONSENT_IS_EEA_KEY)
         defaults.set(consent.hasConsentForDataUsage.rawValue, forKey: LinkrunnerSDK.CONSENT_AD_USER_DATA_KEY)
         defaults.set(consent.hasConsentForAdsPersonalization.rawValue, forKey: LinkrunnerSDK.CONSENT_AD_PERSONALIZATION_KEY)
     }

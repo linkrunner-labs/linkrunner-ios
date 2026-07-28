@@ -73,23 +73,29 @@ public enum ConsentStatus: String, Sendable {
 /// IDFA access, not Google's use of ad user data or personalization. The SDK reports
 /// ATT status separately.
 public struct LinkrunnerConsent: Sendable, Equatable {
-    /// Whether the user is in the European Economic Area, UK or Switzerland — sent to
-    /// Google as `is_eea`. Named to match the equivalent field on other MMP SDKs
-    /// (e.g. AppsFlyer's `isUserSubjectToGDPR`); note it's a region check, not a
-    /// literal legal determination of GDPR applicability (the EEA/UK/CH umbrella
-    /// covers GDPR, UK GDPR and Swiss FADP jointly, which is what Google's API wants).
-    public let isUserSubjectToGDPR: ConsentStatus
+    /// Whether European regulations apply to this user, sent to Google as `is_eea`.
+    ///
+    /// Despite the name, this is **broader than the EEA and broader than GDPR**. Google
+    /// defines the parameter as "European regulations apply to this user and
+    /// conversion", which covers GDPR (EEA), UK GDPR, the Swiss FADP and the DMA. Set it
+    /// `.granted` for users in the **EEA, the United Kingdom or Switzerland** — a UK user
+    /// is subject to UK GDPR rather than GDPR, and a Swiss user to the FADP, but both are
+    /// in scope here. That population is also exactly the scope of Integrated Conversion
+    /// Measurement, so getting this wrong silently excludes the users ICM exists for.
+    ///
+    /// The name mirrors the wire key and Google's own `eea` parameter.
+    public let isEEA: ConsentStatus
     /// Consent to send user data to Google for advertising purposes — sent as `ad_user_data`.
     public let hasConsentForDataUsage: ConsentStatus
     /// Consent to use the data for ad personalization — sent as `ad_personalization`.
     public let hasConsentForAdsPersonalization: ConsentStatus
 
     public init(
-        isUserSubjectToGDPR: ConsentStatus = .unknown,
+        isEEA: ConsentStatus = .unknown,
         hasConsentForDataUsage: ConsentStatus = .unknown,
         hasConsentForAdsPersonalization: ConsentStatus = .unknown
     ) {
-        self.isUserSubjectToGDPR = isUserSubjectToGDPR
+        self.isEEA = isEEA
         self.hasConsentForDataUsage = hasConsentForDataUsage
         self.hasConsentForAdsPersonalization = hasConsentForAdsPersonalization
     }
@@ -98,7 +104,7 @@ public struct LinkrunnerConsent: Sendable, Equatable {
     /// "user said no" from "we were never told".
     func toDictionary() -> SendableDictionary {
         var dict: SendableDictionary = [:]
-        if let isEEA = isUserSubjectToGDPR.wireValue { dict["is_eea"] = isEEA }
+        if let isEEA = isEEA.wireValue { dict["is_eea"] = isEEA }
         if let adUserData = hasConsentForDataUsage.wireValue { dict["ad_user_data"] = adUserData }
         if let adPersonalization = hasConsentForAdsPersonalization.wireValue { dict["ad_personalization"] = adPersonalization }
         return dict
@@ -106,7 +112,7 @@ public struct LinkrunnerConsent: Sendable, Equatable {
 
     /// True when nothing is known, in which case the key is dropped entirely.
     var isEmpty: Bool {
-        return isUserSubjectToGDPR == .unknown && hasConsentForDataUsage == .unknown && hasConsentForAdsPersonalization == .unknown
+        return isEEA == .unknown && hasConsentForDataUsage == .unknown && hasConsentForAdsPersonalization == .unknown
     }
 }
 

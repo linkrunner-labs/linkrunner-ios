@@ -40,7 +40,7 @@ enum TCFConsent {
     /// Reads current consent from the CMP, or an all-unknown value when no TCF data
     /// is present.
     static func read(from defaults: UserDefaults = .standard) -> LinkrunnerConsent {
-        let isUserSubjectToGDPR = readGDPRApplies(from: defaults)
+        let isEEA = readGDPRApplies(from: defaults)
 
         let purposeConsents = defaults.string(forKey: purposeConsentsKey)
         let vendorConsents = defaults.string(forKey: vendorConsentsKey)
@@ -50,7 +50,7 @@ enum TCFConsent {
         let googleVendorConsent = bit(in: vendorConsents, atOneBasedIndex: googleVendorID)
 
         return LinkrunnerConsent(
-            isUserSubjectToGDPR: isUserSubjectToGDPR,
+            isEEA: isEEA,
             hasConsentForDataUsage: resolve(purposes: adUserDataPurposes,
                                 in: purposeConsents,
                                 vendorConsent: googleVendorConsent),

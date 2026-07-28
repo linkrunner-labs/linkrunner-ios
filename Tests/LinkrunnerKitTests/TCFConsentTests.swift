@@ -57,7 +57,7 @@ final class TCFConsentTests: XCTestCase {
     func testNoTCFDataResolvesEverythingUnknown() {
         let consent = TCFConsent.read(from: defaults)
 
-        XCTAssertEqual(consent.isUserSubjectToGDPR, .unknown)
+        XCTAssertEqual(consent.isEEA, .unknown)
         XCTAssertEqual(consent.hasConsentForDataUsage, .unknown)
         XCTAssertEqual(consent.hasConsentForAdsPersonalization, .unknown)
     }
@@ -76,7 +76,7 @@ final class TCFConsentTests: XCTestCase {
 
         let consent = TCFConsent.read(from: defaults)
 
-        XCTAssertEqual(consent.isUserSubjectToGDPR, .granted)
+        XCTAssertEqual(consent.isEEA, .granted)
         XCTAssertEqual(consent.hasConsentForDataUsage, .granted)
         XCTAssertEqual(consent.hasConsentForAdsPersonalization, .granted)
     }
@@ -177,27 +177,27 @@ final class TCFConsentTests: XCTestCase {
     func testGDPRAppliesZeroMeansNotSubject() {
         writeCMP(gdprApplies: 0)
 
-        XCTAssertEqual(TCFConsent.read(from: defaults).isUserSubjectToGDPR, .denied)
+        XCTAssertEqual(TCFConsent.read(from: defaults).isEEA, .denied)
     }
 
     func testGDPRAppliesAcceptsStringEncoding() {
         // Some CMPs store this as a string rather than the specified integer.
         writeCMP(gdprApplies: "1")
 
-        XCTAssertEqual(TCFConsent.read(from: defaults).isUserSubjectToGDPR, .granted)
+        XCTAssertEqual(TCFConsent.read(from: defaults).isEEA, .granted)
     }
 
     func testGDPRAppliesUnrecognizedValueYieldsUnknown() {
         writeCMP(gdprApplies: "maybe")
 
-        XCTAssertEqual(TCFConsent.read(from: defaults).isUserSubjectToGDPR, .unknown)
+        XCTAssertEqual(TCFConsent.read(from: defaults).isEEA, .unknown)
     }
 
     // MARK: - Serialization
 
     func testUnknownSignalsAreOmittedRatherThanSentAsDenied() {
         let consent = LinkrunnerConsent(
-            isUserSubjectToGDPR: .granted,
+            isEEA: .granted,
             hasConsentForDataUsage: .denied,
             hasConsentForAdsPersonalization: .unknown
         )
