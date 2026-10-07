@@ -60,6 +60,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
         var firstOpenTimestamp: Double?
         var attStatus: String?
         var consent: LinkrunnerConsent?
+        /// Test mode build facts (LIN-3369). Flattened into the top level of `device_data`.
+        var buildFacts: BuildFacts?
 
         struct DisplayData: Sendable {
             var width: Double
@@ -101,6 +103,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
             if let firstOpenTimestamp = firstOpenTimestamp { dict["first_open_timestamp"] = firstOpenTimestamp }
             if let attStatus = attStatus { dict["att_status"] = attStatus }
             if let consent = consent, !consent.isEmpty { dict["consent"] = consent.toDictionary() }
+            if let buildFacts = buildFacts {
+                for (key, value) in buildFacts.toDictionary() { dict[key] = value }
+            }
 
             return dict
         }
@@ -279,6 +284,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
         self.disableIdfa = disableIdfa ?? false
         self.debug = debug ?? false
 
+        // Start the StoreKit environment lookup for the Test mode build facts now, so it
+        // overlaps the work below instead of adding to init time. Bounded and cached.
+        await BuildFactsProvider.shared.prewarm()
+
         // Set app install time on first initialization
         if appInstallTime == nil {
             appInstallTime = getAppInstallTime()
@@ -299,6 +308,12 @@ public class LinkrunnerSDK: @unchecked Sendable {
         // error or timeout we omit `odm_info` and carry on. Initialization must
         // never permanently depend on Google being reachable.
         await resolveODMInfo()
+
+        // Show developers the build facts the server will use to pick live or test.
+        let buildFacts = await BuildFactsProvider.shared.facts()
+        if self.debug, await BuildFactsProvider.shared.shouldLog() {
+            print(buildFacts.logLine)
+        }
 
         // Only set secretKey and keyId when they are provided
         if let secretKey = secretKey, let keyId = keyId, !secretKey.isEmpty, !keyId.isEmpty {
@@ -1296,7 +1311,8 @@ extension LinkrunnerSDK {
                 odmInfo: self.odmInfo,
                 firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
                 attStatus: self.getATTStatus(),
-                consent: self.resolveConsent()
+                consent: self.resolveConsent(),
+                buildFacts: await BuildFactsProvider.shared.facts()
             )
 #else
             // Fallback for non-UIKit platforms
@@ -1328,7 +1344,8 @@ extension LinkrunnerSDK {
                 odmInfo: self.odmInfo,
                 firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
                 attStatus: self.getATTStatus(),
-                consent: self.resolveConsent()
+                consent: self.resolveConsent(),
+                buildFacts: await BuildFactsProvider.shared.facts()
             )
 #endif
         }.value
