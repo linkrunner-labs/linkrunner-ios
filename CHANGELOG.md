@@ -5,6 +5,18 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Build facts for Test mode** (LIN-3369). `device_data` on every request, including `initialize`, now carries facts the server uses to decide whether an install is live or test. They come from the OS and the app's signing, never from a developer flag, and there is no separate test token:
+  - `build_facts_version`: `1`. Its presence tells the server this SDK sends build facts; older SDKs are always treated as live.
+  - `is_debuggable`: `true` when the app is development-signed (`get-task-allow` is true in the embedded provisioning profile) or StoreKit reports the `xcode` environment.
+  - `installer_package`: always an empty string on iOS (Android only).
+  - `app_store_environment`: on iOS 16+, `AppTransaction.shared.environment` as `production`, `sandbox` (TestFlight) or `xcode`. The lookup starts at the top of `initialize`, is waited for at most 1.5 seconds and is cached for the process. Below iOS 16, or when StoreKit cannot answer in time, the SDK falls back to `development` when an `embedded.mobileprovision` is present (development, ad hoc or enterprise signing), then `sandbox` when the receipt file is `sandboxReceipt`, otherwise an empty string. The SDK never guesses `production`.
+  - `is_emulator`: `true` on the iOS Simulator. Informational only, not a test signal.
+- With `debug: true` in `initialize`, the SDK prints one line with these facts, for example `Linkrunner build facts: debuggable=true, installer=(n/a on iOS), environment=xcode, simulator=true`, so you can see what the server will use.
+
 ## [4.1.0] - 2026-07-27
 
 ### Added
