@@ -5,6 +5,12 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] - 2026-10-08
+
+### Added
+
+- `LRAttributionDataResponse` now has `gaid` and `idfa`, the advertising identifiers Linkrunner recorded the install with, returned by `getAttributionData()`. Use them to join Linkrunner attribution with your own data instead of reading the IDFA again on the device. Both are optional: `idfa` is nil when the user has not authorized App Tracking Transparency or the identifier is zeroed, and `gaid` is always nil on iOS. Older API responses without these keys still parse, with both fields nil. The public initializer takes `gaid` and `idfa` as optional arguments defaulting to nil, so existing callers compile unchanged.
+
 ## [4.1.0] - 2026-07-27
 
 ### Added

@@ -439,18 +439,26 @@ public struct LRAttributionDataResponse: Codable, Sendable {
     public let attributionSource: String
     public let campaignData: CampaignData?
     public let deeplink: String?
+    /// Always nil on iOS.
+    public let gaid: String?
+    /// Nil when ATT is not authorized.
+    public let idfa: String?
     
     enum CodingKeys: String, CodingKey {
         case attributionSource = "attribution_source"
         case campaignData = "campaign_data"
         case deeplink
+        case gaid
+        case idfa
     }
     
     // Public initializer for creating empty/default responses
-    public init(attributionSource: String, campaignData: CampaignData?, deeplink: String?) {
+    public init(attributionSource: String, campaignData: CampaignData?, deeplink: String?, gaid: String? = nil, idfa: String? = nil) {
         self.attributionSource = attributionSource
         self.campaignData = campaignData
         self.deeplink = deeplink
+        self.gaid = gaid
+        self.idfa = idfa
     }
     
     // Custom decoder to handle Bool/Int conversion for rootDomain
@@ -460,6 +468,8 @@ public struct LRAttributionDataResponse: Codable, Sendable {
         attributionSource = try container.decodeIfPresent(String.self, forKey: .attributionSource) ?? "UNKNOWN"
         campaignData = try container.decodeIfPresent(CampaignData.self, forKey: .campaignData)
         deeplink = try container.decodeIfPresent(String.self, forKey: .deeplink)
+        gaid = try container.decodeIfPresent(String.self, forKey: .gaid)
+        idfa = try container.decodeIfPresent(String.self, forKey: .idfa)
     }
     
     // Legacy dictionary initializer for backward compatibility
@@ -479,6 +489,9 @@ public struct LRAttributionDataResponse: Codable, Sendable {
         } else {
             self.deeplink = nil
         }
+
+        self.gaid = dictionary["gaid"] as? String
+        self.idfa = dictionary["idfa"] as? String
     }
 
     public func toDictionary() -> SendableDictionary {
@@ -492,6 +505,14 @@ public struct LRAttributionDataResponse: Codable, Sendable {
         
         if let deeplink = deeplink {
             dict["deeplink"] = deeplink
+        }
+
+        if let gaid = gaid {
+            dict["gaid"] = gaid
+        }
+
+        if let idfa = idfa {
+            dict["idfa"] = idfa
         }
         
         return dict
