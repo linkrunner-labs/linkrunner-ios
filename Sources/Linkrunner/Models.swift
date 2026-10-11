@@ -386,18 +386,6 @@ public struct IntegrationData: Sendable {
     }
 }
 
-public enum PaymentType: String, Sendable {
-    case firstPayment = "FIRST_PAYMENT"
-    case secondPayment = "SECOND_PAYMENT"
-    case walletTopup = "WALLET_TOPUP"
-    case fundsWithdrawal = "FUNDS_WITHDRAWAL"
-    case subscriptionCreated = "SUBSCRIPTION_CREATED"
-    case subscriptionRenewed = "SUBSCRIPTION_RENEWED"
-    case oneTime = "ONE_TIME"
-    case recurring = "RECURRING"
-    case `default` = "DEFAULT"
-}
-
 public enum PaymentStatus: String, Sendable {
     case initiated = "PAYMENT_INITIATED"
     case completed = "PAYMENT_COMPLETED"
@@ -405,20 +393,49 @@ public enum PaymentStatus: String, Sendable {
     case cancelled = "PAYMENT_CANCELLED"
 }
 
-// MARK: - API Response Models
+public enum EventPaymentError: Error, Equatable, Sendable {
+    case invalidAmount
+    case invalidPaymentId
+    case invalidCurrency
+}
 
-/// Response model for capture-payment endpoint
-public struct CapturePaymentResponse: Codable, Sendable {
-    public let success: Bool
-    public let message: String
-    public let data: String?
-    
-    enum CodingKeys: String, CodingKey {
-        case success
-        case message
-        case data
+/// Revenue attached to a tracked event; the event name becomes the payment type.
+public struct EventPayment: Sendable, Equatable {
+    public let amount: Double
+    public let paymentId: String
+    public let currency: String
+    public let status: PaymentStatus?
+
+    public init(amount: Double, paymentId: String, currency: String, status: PaymentStatus? = nil) throws {
+        guard amount.isFinite, amount >= 0 else { throw EventPaymentError.invalidAmount }
+        guard !paymentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw EventPaymentError.invalidPaymentId
+        }
+        let code = currency.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard code.count == 3, code.unicodeScalars.allSatisfy({ ("A"..."Z").contains($0) || ("a"..."z").contains($0) }) else {
+            throw EventPaymentError.invalidCurrency
+        }
+        self.amount = amount
+        self.paymentId = paymentId
+        self.currency = code.uppercased()
+        self.status = status
+    }
+
+    // amount, payment_id and currency together make the backend store the event as a payment.
+    var requestFields: SendableDictionary {
+        var fields: SendableDictionary = [
+            "amount": amount,
+            "payment_id": paymentId,
+            "currency": currency
+        ]
+        if let status = status {
+            fields["status"] = status.rawValue
+        }
+        return fields
     }
 }
+
+// MARK: - API Response Models
 
 /// Response model for capture-event endpoint
 public struct CaptureEventResponse: Codable, Sendable {

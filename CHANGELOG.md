@@ -5,6 +5,29 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - Unreleased
+
+### Added
+
+- `trackEvent` takes an optional `payment: EventPayment`. When it is set, the event is stored as a payment and the event name is used as the payment type, so revenue shows up under your own event names. `EventPayment(amount:paymentId:currency:status:)` throws `EventPaymentError` for a negative or non-finite amount, a blank `paymentId` or a `currency` that is not a 3-letter ISO 4217 code. `status` defaults to `PAYMENT_COMPLETED` on the server. Existing `trackEvent` calls compile unchanged.
+
+### Removed
+
+- `capturePayment`, `removePayment`, `PaymentType` and `CapturePaymentResponse`. Send payments with `trackEvent` and an `EventPayment` instead.
+
+### Migration
+
+```swift
+// 4.x
+await LinkrunnerSDK.shared.capturePayment(amount: 499, userId: "user_1", paymentId: "ord_1", type: .firstPayment)
+
+// 5.0.0
+let payment = try EventPayment(amount: 499, paymentId: "ord_1", currency: "INR")
+await LinkrunnerSDK.shared.trackEvent(eventName: "first_payment", eventData: ["plan": "pro"], payment: payment)
+```
+
+The payment is linked to the user set with `signup` or `setUserData`.
+
 ## [4.2.0] - 2026-10-08
 
 ### Added
