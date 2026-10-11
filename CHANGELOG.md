@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- `capturePayment`, `removePayment`, `PaymentType` and `CapturePaymentResponse`. Send payments with `trackEvent` and an `EventPayment` instead.
+- `capturePayment`, `removePayment`, `PaymentType` and `CapturePaymentResponse`. Send payments with `trackEvent` and an `EventPayment` instead. There is no replacement for removing a payment.
 
 ### Migration
 
