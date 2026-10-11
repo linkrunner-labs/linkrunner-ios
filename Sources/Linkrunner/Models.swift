@@ -400,7 +400,6 @@ public enum EventPaymentError: Error, Equatable, Sendable {
 }
 
 /// Revenue attached to a tracked event; the event name becomes the payment type.
-/// An empty userId falls back to the user saved by signup or setUserData, as capturePayment did.
 public struct EventPayment: Sendable, Equatable {
     public let amount: Double
     public let paymentId: String
