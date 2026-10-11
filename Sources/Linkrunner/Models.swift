@@ -400,13 +400,15 @@ public enum EventPaymentError: Error, Equatable, Sendable {
 }
 
 /// Revenue attached to a tracked event; the event name becomes the payment type.
+/// An empty userId falls back to the user saved by signup or setUserData, as capturePayment did.
 public struct EventPayment: Sendable, Equatable {
     public let amount: Double
     public let paymentId: String
     public let currency: String
-    public let status: PaymentStatus?
+    public let userId: String
+    public let status: PaymentStatus
 
-    public init(amount: Double, paymentId: String, currency: String, status: PaymentStatus? = nil) throws {
+    public init(amount: Double, paymentId: String, currency: String, userId: String, status: PaymentStatus = .completed) throws {
         guard amount.isFinite, amount >= 0 else { throw EventPaymentError.invalidAmount }
         guard !paymentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw EventPaymentError.invalidPaymentId
@@ -418,6 +420,7 @@ public struct EventPayment: Sendable, Equatable {
         self.amount = amount
         self.paymentId = paymentId
         self.currency = code.uppercased()
+        self.userId = userId
         self.status = status
     }
 
@@ -426,10 +429,11 @@ public struct EventPayment: Sendable, Equatable {
         var fields: SendableDictionary = [
             "amount": amount,
             "payment_id": paymentId,
-            "currency": currency
+            "currency": currency,
+            "status": status.rawValue
         ]
-        if let status = status {
-            fields["status"] = status.rawValue
+        if !userId.isEmpty {
+            fields["user_id"] = userId
         }
         return fields
     }

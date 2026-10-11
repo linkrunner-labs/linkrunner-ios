@@ -9,11 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `trackEvent` takes an optional `payment: EventPayment`. When it is set, the event is stored as a payment and the event name is used as the payment type, so revenue shows up under your own event names. `EventPayment(amount:paymentId:currency:status:)` throws `EventPaymentError` for a negative or non-finite amount, a blank `paymentId` or a `currency` that is not a 3-letter ISO 4217 code. `status` defaults to `PAYMENT_COMPLETED` on the server. Existing `trackEvent` calls compile unchanged.
+- `trackPayment(eventName:paymentId:userId:amount:currency:status:eventData:eventId:)` records a payment. It takes the same fields as `capturePayment`, with `type` replaced by `eventName` and a new required `currency` (3-letter ISO 4217 code). `userId` is required; an empty value falls back to the user saved by `signup` or `setUserData`, as before. `status` defaults to `.completed`. An invalid payment is not sent, and the reason is printed in debug builds.
+- `trackEvent` also takes an optional `payment: EventPayment` (`try EventPayment(amount:paymentId:currency:userId:status:)`) for the same result. Its initializer throws `EventPaymentError` for a negative or non-finite amount, a blank `paymentId` or a `currency` that is not a 3-letter code.
 
 ### Removed
 
-- `capturePayment`, `removePayment`, `PaymentType` and `CapturePaymentResponse`. Send payments with `trackEvent` and an `EventPayment` instead. There is no replacement for removing a payment.
+- `capturePayment`, `removePayment`, `PaymentType` and `CapturePaymentResponse`. Send payments with `trackPayment` instead. There is no replacement for removing a payment.
 
 ### Migration
 
@@ -22,11 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 await LinkrunnerSDK.shared.capturePayment(amount: 499, userId: "user_1", paymentId: "ord_1", type: .firstPayment)
 
 // 5.0.0
-let payment = try EventPayment(amount: 499, paymentId: "ord_1", currency: "INR")
-await LinkrunnerSDK.shared.trackEvent(eventName: "first_payment", eventData: ["plan": "pro"], payment: payment)
+await LinkrunnerSDK.shared.trackPayment(eventName: "FIRST_PAYMENT", paymentId: "ord_1", userId: "user_1", amount: 499, currency: "INR")
 ```
-
-The payment is linked to the user set with `signup` or `setUserData`.
 
 ### Payment names and dashboard mappings
 

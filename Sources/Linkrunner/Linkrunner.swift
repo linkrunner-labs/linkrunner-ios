@@ -584,8 +584,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
         if let payment = payment {
             requestData.merge(payment.requestFields) { _, new in new }
             #if DEBUG
-            if userId == nil {
-                print("Linkrunner: payment event \(eventName) sent without a user id; call signup or setUserData first to link it to a user")
+            if userId == nil && payment.userId.isEmpty {
+                print("Linkrunner: payment event \(eventName) sent without a user id; pass userId or call signup or setUserData first")
             }
             #endif
         }
@@ -609,6 +609,39 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
+    /// Track a payment; the event name becomes the payment type in reports and mappings.
+    /// - Parameters:
+    ///   - eventName: Payment name, for example "FIRST_PAYMENT" or "purchase"
+    ///   - paymentId: Unique payment identifier
+    ///   - userId: Your user id; an empty value falls back to the user saved by signup or setUserData
+    ///   - amount: Amount paid, a finite number >= 0
+    ///   - currency: 3-letter ISO 4217 code
+    ///   - status: Payment status, `.completed` by default
+    ///   - eventData: Optional additional data, such as product details
+    ///   - eventId: Optional unique identifier to deduplicate events server-side
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    public func trackPayment(
+        eventName: String,
+        paymentId: String,
+        userId: String,
+        amount: Double,
+        currency: String,
+        status: PaymentStatus = .completed,
+        eventData: SendableDictionary? = nil,
+        eventId: String? = nil
+    ) async {
+        let payment: EventPayment
+        do {
+            payment = try EventPayment(amount: amount, paymentId: paymentId, currency: currency, userId: userId, status: status)
+        } catch {
+            #if DEBUG
+            print("Linkrunner: trackPayment failed - \(error)")
+            #endif
+            return
+        }
+        await trackEvent(eventName: eventName, eventData: eventData, eventId: eventId, payment: payment)
+    }
+
     /// Update the push notification token for the current user
     /// - Parameter pushToken: The push notification token to be associated with the user
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
