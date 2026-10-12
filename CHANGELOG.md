@@ -5,6 +5,17 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] - 2026-10-12
+
+### Changed
+
+- `setUserData` no longer needs a customer user id, so it can be called right after `initialize`. `UserData.id` is now `String?` and the initializer's `id` defaults to nil: pass only the analytics ids you have (for example `mixPanelDistinctId`, `amplitudeDeviceId`, `posthogDistinctId`) and add `id` later, once your app knows the user. Linkrunner sets its attribution properties (`lr_campaign`, `lr_ad_network`) on the profiles of the analytics tools you identified, when that integration is configured for your project. Existing `UserData(id: ...)` calls compile unchanged; code that reads `userData.id` now gets an optional. `signup` still requires `id` and does nothing when it is missing or empty.
+- An id-less (or empty-id) `setUserData` call no longer clears the stored customer user id, so custom events and payments keep their `user_id`.
+
+### Added
+
+- `UserData.moengageUserId`, sent as `moengage_user_id`, so MoEngage profiles receive Linkrunner attribution.
+
 ## [4.2.0] - 2026-10-08
 
 ### Added
