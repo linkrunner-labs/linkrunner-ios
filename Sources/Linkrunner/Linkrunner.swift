@@ -346,7 +346,13 @@ public class LinkrunnerSDK: @unchecked Sendable {
             return
         }
 
-        setUserId(userData.id)
+        guard let customerUserId = userData.customerUserId else {
+            #if DEBUG
+            print("Linkrunner: Signup failed - userData.id is required")
+            #endif
+            return
+        }
+        setUserId(customerUserId)
 
         var requestData: SendableDictionary = [
             "token": token,
@@ -376,7 +382,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
-    /// Set user data in Linkrunner
+    /// Set user data in Linkrunner.
+    ///
+    /// Can be called right after `initialize`: `userData.id` is optional here, so you can pass
+    /// only analytics ids (Mixpanel, Amplitude, PostHog, ...) before your app knows the user.
+    /// Linkrunner then sets its attribution properties on those tools' profiles.
     /// - Parameter userData: User data to set
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     public func setUserData(_ userData: UserData) async {
@@ -387,7 +397,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
             return
         }
 
-        setUserId(userData.id)
+        // Only a real id replaces the stored customer user id; an id-less call must not
+        // clear it (the Keychain helper deletes the key on nil/empty).
+        if let customerUserId = userData.customerUserId {
+            setUserId(customerUserId)
+        }
 
         let requestData: SendableDictionary = [
             "token": token,

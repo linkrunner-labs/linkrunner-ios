@@ -30,6 +30,17 @@ await LinkrunnerSDK.shared.trackPayment(eventName: "FIRST_PAYMENT", paymentId: "
 
 The event name you pass becomes the payment type in reports and in your dashboard event mappings, and mappings match it exactly. If you used one of the old payment types, pass the same name (in any case, for example `first_payment` or `DEFAULT`). Linkrunner stores it as the uppercase type, so your existing mappings, reports and partner templates keep working with no change. If you pick a new name such as `purchase`, add a mapping for it in the dashboard before you release, or those payments are not sent to ad networks. `capturePayment` without a type was stored as `DEFAULT`.
 
+## [4.3.0] - 2026-10-12
+
+### Changed
+
+- `setUserData` no longer needs a customer user id, so it can be called right after `initialize`. `UserData.id` is now `String?` and the initializer's `id` defaults to nil: pass only the analytics ids you have (for example `mixPanelDistinctId`, `amplitudeDeviceId`, `posthogDistinctId`) and add `id` later, once your app knows the user. Linkrunner sets its attribution properties (`lr_campaign`, `lr_ad_network`) on the profiles of the analytics tools you identified, when that integration is configured for your project. Existing `UserData(id: ...)` calls compile unchanged; code that reads `userData.id` now gets an optional. `signup` still requires `id` and does nothing when it is missing or empty.
+- An id-less (or empty-id) `setUserData` call no longer clears the stored customer user id, so custom events and payments keep their `user_id`.
+
+### Added
+
+- `UserData.moengageUserId`, sent as `moengage_user_id`, so MoEngage profiles receive Linkrunner attribution.
+
 ## [4.2.0] - 2026-10-08
 
 ### Added

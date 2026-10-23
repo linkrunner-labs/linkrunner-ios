@@ -124,8 +124,13 @@ public struct LinkrunnerConsent: Sendable, Equatable {
 
 // MARK: - Model Types
 
+/// User data for `signup` and `setUserData`.
+///
+/// `id` is your customer user id. `signup` requires it; `setUserData` does not, so it can be
+/// called right after `initialize` with only analytics ids (for example `mixPanelDistinctId`),
+/// before your app knows the user.
 public struct UserData: Sendable {
-    public let id: String
+    public let id: String?
     public let name: String?
     public let phone: String?
     public let email: String?
@@ -138,9 +143,10 @@ public struct UserData: Sendable {
     public let gaAppInstanceId: String?
     public let gaSessionId: String?
     public let netcoreDeviceGuid: String?
+    public let moengageUserId: String?
     
     public init(
-        id: String,
+        id: String? = nil,
         name: String? = nil,
         phone: String? = nil,
         email: String? = nil,
@@ -152,7 +158,8 @@ public struct UserData: Sendable {
         brazeDeviceId: String? = nil,
         gaAppInstanceId: String? = nil,
         gaSessionId: String? = nil,
-        netcoreDeviceGuid: String? = nil
+        netcoreDeviceGuid: String? = nil,
+        moengageUserId: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -167,13 +174,23 @@ public struct UserData: Sendable {
         self.gaAppInstanceId = gaAppInstanceId
         self.gaSessionId = gaSessionId
         self.netcoreDeviceGuid = netcoreDeviceGuid
+        self.moengageUserId = moengageUserId
+    }
+
+    /// The customer user id when one was given; nil for an id-less `setUserData`.
+    var customerUserId: String? {
+        guard let id = id, !id.isEmpty else { return nil }
+        return id
     }
     
     /// Converts UserData to a dictionary, optionally hashing PII fields
     /// - Parameter hashPII: Whether to hash PII fields
     /// - Returns: Dictionary representation of UserData
     func toDictionary(hashPII: Bool = false) -> SendableDictionary {
-        var dict: SendableDictionary = ["id": id]
+        var dict: SendableDictionary = [:]
+        if let customerUserId = customerUserId {
+            dict["id"] = customerUserId
+        }
         
         if let name = name {
             dict["name"] = hashPII ? LinkrunnerSDK.shared.hashWithSHA256(name) : name
@@ -221,6 +238,10 @@ public struct UserData: Sendable {
         
         if let netcoreDeviceGuid = netcoreDeviceGuid {
             dict["netcore_device_guid"] = netcoreDeviceGuid
+        }
+
+        if let moengageUserId = moengageUserId {
+            dict["moengage_user_id"] = moengageUserId
         }
         
         return dict
