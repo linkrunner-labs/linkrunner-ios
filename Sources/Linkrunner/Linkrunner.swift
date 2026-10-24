@@ -549,18 +549,16 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
-    /// Track a custom event
+    /// Track an in-app event. Put amount, paymentId and currency in eventData to record it as a payment.
     /// - Parameters:
-    ///   - eventName: Name of the event
-    ///   - eventData: Optional event data
+    ///   - eventName: Name of the event; for a payment it is the payment type in reports and mappings
+    ///   - eventData: Optional event data; a payment also needs userId, and status defaults to PAYMENT_COMPLETED
     ///   - eventId: Optional unique identifier to deduplicate events server-side
-    ///   - payment: Optional revenue; when set the event is stored as a payment named eventName
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     public func trackEvent(
         eventName: String,
         eventData: SendableDictionary? = nil,
-        eventId: String? = nil,
-        payment: EventPayment? = nil
+        eventId: String? = nil
     ) async {
         guard let token = self.token else {
             #if DEBUG
@@ -576,10 +574,23 @@ public class LinkrunnerSDK: @unchecked Sendable {
             return
         }
         
+        let payment: InAppPayment?
+        let sentEventData: SendableDictionary?
+        switch InAppPayment.extract(eventData) {
+        case .success(let split):
+            payment = split.payment
+            sentEventData = split.eventData
+        case .failure(let failure):
+            #if DEBUG
+            print("Linkrunner: trackEvent failed - \(failure)")
+            #endif
+            return
+        }
+
         var requestData: SendableDictionary = [
             "token": token,
             "event_name": eventName,
-            "event_data": eventData as Any,
+            "event_data": sentEventData as Any,
             "device_data": (await deviceData()).toDictionary(),
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
             "time_since_app_install": getTimeSinceAppInstall(),
@@ -623,39 +634,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
-    /// Track a payment; the event name becomes the payment type in reports and mappings.
-    /// - Parameters:
-    ///   - eventName: Payment name, for example "FIRST_PAYMENT" or "purchase"
-    ///   - paymentId: Unique payment identifier
-    ///   - userId: Your user id; an empty value falls back to the user saved by signup or setUserData
-    ///   - amount: Amount paid, a finite number >= 0
-    ///   - currency: 3-letter ISO 4217 code
-    ///   - status: Payment status, `.completed` by default
-    ///   - eventData: Optional additional data, such as product details
-    ///   - eventId: Optional unique identifier to deduplicate events server-side
-    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func trackPayment(
-        eventName: String,
-        paymentId: String,
-        userId: String,
-        amount: Double,
-        currency: String,
-        status: PaymentStatus = .completed,
-        eventData: SendableDictionary? = nil,
-        eventId: String? = nil
-    ) async {
-        let payment: EventPayment
-        do {
-            payment = try EventPayment(amount: amount, paymentId: paymentId, currency: currency, userId: userId, status: status)
-        } catch {
-            #if DEBUG
-            print("Linkrunner: trackPayment failed - \(error)")
-            #endif
-            return
-        }
-        await trackEvent(eventName: eventName, eventData: eventData, eventId: eventId, payment: payment)
-    }
-
     /// Update the push notification token for the current user
     /// - Parameter pushToken: The push notification token to be associated with the user
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)

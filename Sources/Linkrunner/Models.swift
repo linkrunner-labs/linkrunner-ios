@@ -414,34 +414,77 @@ public enum PaymentStatus: String, Sendable {
     case cancelled = "PAYMENT_CANCELLED"
 }
 
-public enum EventPaymentError: Error, Equatable, Sendable {
-    case invalidAmount
-    case invalidPaymentId
-    case invalidCurrency
-}
+/// Payment read from trackEvent eventData: amount, paymentId and currency together make the event a payment.
+struct InAppPayment: Equatable {
+    let amount: Double
+    let paymentId: String
+    let currency: String
+    let userId: String
+    let status: PaymentStatus
 
-/// Revenue attached to a tracked event; the event name becomes the payment type.
-public struct EventPayment: Sendable, Equatable {
-    public let amount: Double
-    public let paymentId: String
-    public let currency: String
-    public let userId: String
-    public let status: PaymentStatus
+    enum Failure: Error, Equatable, CustomStringConvertible {
+        case incomplete
+        case invalidAmount
+        case invalidPaymentId
+        case invalidCurrency
+        case missingUserId
+        case invalidStatus
 
-    public init(amount: Double, paymentId: String, currency: String, userId: String, status: PaymentStatus = .completed) throws {
-        guard amount.isFinite, amount >= 0 else { throw EventPaymentError.invalidAmount }
-        guard !paymentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw EventPaymentError.invalidPaymentId
+        var description: String {
+            switch self {
+            case .incomplete: return "amount, paymentId and currency must be sent together"
+            case .invalidAmount: return "amount must be a finite number >= 0"
+            case .invalidPaymentId: return "paymentId must be a non-empty string"
+            case .invalidCurrency: return "currency must be a 3-letter ISO 4217 code"
+            case .missingUserId: return "userId is required for a payment"
+            case .invalidStatus: return "status is not valid"
+            }
         }
-        let code = currency.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard code.count == 3, code.unicodeScalars.allSatisfy({ ("A"..."Z").contains($0) || ("a"..."z").contains($0) }) else {
-            throw EventPaymentError.invalidCurrency
+    }
+
+    static let paymentKeys: Set<String> = ["amount", "paymentId", "currency", "userId", "status"]
+
+    /// Without a paymentId the event stays a custom event and its data is left untouched.
+    static func extract(_ eventData: SendableDictionary?) -> Result<(payment: InAppPayment?, eventData: SendableDictionary?), Failure> {
+        guard let data = eventData, let paymentIdValue = present(data["paymentId"]) else {
+            return .success((nil, eventData))
         }
-        self.amount = amount
-        self.paymentId = paymentId
-        self.currency = code.uppercased()
-        self.userId = userId
-        self.status = status
+        guard let amountValue = present(data["amount"]), let currencyValue = present(data["currency"]) else {
+            return .failure(.incomplete)
+        }
+        guard let amount = number(amountValue), amount.isFinite, amount >= 0 else { return .failure(.invalidAmount) }
+        guard let paymentId = paymentIdValue as? String,
+              !paymentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .failure(.invalidPaymentId)
+        }
+        guard let currency = (currencyValue as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              currency.count == 3,
+              currency.unicodeScalars.allSatisfy({ ("A"..."Z").contains($0) || ("a"..."z").contains($0) }) else {
+            return .failure(.invalidCurrency)
+        }
+        guard let userId = present(data["userId"]) as? String else { return .failure(.missingUserId) }
+        let status: PaymentStatus
+        switch present(data["status"]) {
+        case nil: status = .completed
+        case let value as PaymentStatus: status = value
+        case let value as String:
+            guard let parsed = PaymentStatus(rawValue: value) else { return .failure(.invalidStatus) }
+            status = parsed
+        default: return .failure(.invalidStatus)
+        }
+        let rest = data.filter { !paymentKeys.contains($0.key) }
+        let payment = InAppPayment(amount: amount, paymentId: paymentId, currency: currency.uppercased(), userId: userId, status: status)
+        return .success((payment, rest.isEmpty ? nil : rest))
+    }
+
+    private static func present(_ value: Any?) -> Any? {
+        guard let value = value, !(value is NSNull) else { return nil }
+        return value
+    }
+
+    private static func number(_ value: Any) -> Double? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        return number.doubleValue
     }
 
     // amount, payment_id and currency together make the backend store the event as a payment.
