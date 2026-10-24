@@ -108,13 +108,13 @@ public class LinkrunnerSDK: @unchecked Sendable {
     // Network monitoring properties
 #if canImport(Network)
     private var networkMonitor: NWPathMonitor?
-    private var currentConnectionType: String?
+    @Synchronized private var currentConnectionType: String? = nil
 #endif
     public static let shared = LinkrunnerSDK()
     
-    private var token: String?
-    private var secretKey: String?
-    private var keyId: String?
+    @Synchronized private var token: String? = nil
+    @Synchronized private var secretKey: String? = nil
+    @Synchronized private var keyId: String? = nil
 
     // Time tracking for SKAN
     private var appInstallTime: Date?
@@ -126,7 +126,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     // Assigned eagerly rather than `lazy`: this is read from `deviceData()` on every
     // request, and Swift's lazy initialization is not atomic, so concurrent API calls
     // could enter the initializer at once.
-    private var consent: LinkrunnerConsent
+    @Synchronized private var consent: LinkrunnerConsent
 
     /// When enabled, consent is read from an IAB TCF CMP's `IABTCF_*` keys for any
     /// signal the app has not set explicitly. Opt-in — see `enableTCFConsentCollection`.
@@ -134,12 +134,12 @@ public class LinkrunnerSDK: @unchecked Sendable {
 
     /// Resolved once during `initialize` and reused for every subsequent payload.
     /// Never logged — see ODMService.
-    private var odmInfo: String?
+    @Synchronized private var odmInfo: String? = nil
 
     /// AdServices attribution token, cached for the process. Previously re-fetched on
     /// every request, which meant a synchronous `AAAttribution.attributionToken()` call
     /// on each network call rather than once per install.
-    private var cachedAttributionToken: String?
+    @Synchronized var cachedAttributionToken: String? = nil
 
     /// Hardware model identifier, resolved once. `deviceData()` runs on every request
     /// and the hardware cannot change mid-process, so there is no reason to call
@@ -1194,7 +1194,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "4.3.0" // Swift package version
+        return "4.3.1" // Swift package version
     }
     
     private func getAppVersion() -> String {

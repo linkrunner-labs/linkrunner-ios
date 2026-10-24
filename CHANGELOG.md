@@ -5,6 +5,12 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.1] - 2026-10-24
+
+### Fixed
+
+- Fixed a launch-time `EXC_BAD_ACCESS` crash when `initialize`, `setUserData` and `trackEvent` run at the same time. Since 4.1.0 the AdServices attribution token was cached in a shared property without a lock, so one call could free the token while another was still reading it. The token cache, `odm_info`, consent, the project token, signing keys and connection type are now read and written under a lock. No API changes.
+
 ## [4.3.0] - 2026-10-12
 
 ### Changed
