@@ -5,6 +5,43 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - Unreleased
+
+### Changed
+
+- `trackEvent(eventName:eventData:eventId:)` now also records payments. Put `amount`, `paymentId` and `currency` (3-letter ISO 4217 code, new and required) in `eventData` and the event is sent as a payment named `eventName`. A payment also needs `userId` in `eventData`; an empty value falls back to the user saved by `signup` or `setUserData`. `status` is optional, takes a `PaymentStatus` or its raw value such as `"PAYMENT_CANCELLED"`, and defaults to `.completed`. The payment keys are sent as payment fields and every other key stays in the event data.
+- `eventData` without `paymentId` is a custom event, sent exactly as in 4.x, including any `amount` or `currency` keys.
+- `paymentId` without `amount` or `currency`, or an invalid payment field, is not sent, and the reason is printed in debug builds.
+
+### Removed
+
+- `capturePayment`, `removePayment`, `PaymentType` and `CapturePaymentResponse`. Send payments with `trackEvent`. There is no replacement for removing a payment; send the same `paymentId` with `.cancelled` for a refund.
+
+### Migration
+
+Rename `capturePayment` to `trackEvent`, pass the old type as the event name with the exact same spelling, and move the fields into `eventData` with a new `currency`.
+
+```swift
+// 4.x
+await LinkrunnerSDK.shared.capturePayment(amount: 499, userId: "user_1", paymentId: "ord_1", type: .firstPayment)
+
+// 5.0.0
+await LinkrunnerSDK.shared.trackEvent(
+    eventName: "FIRST_PAYMENT",
+    eventData: [
+        "amount": 499,
+        "paymentId": "ord_1",
+        "currency": "INR",
+        "userId": "user_1",
+        "status": PaymentStatus.completed
+    ]
+)
+```
+
+### Payment names and dashboard mappings
+
+The event name you pass becomes the payment type in reports and in your dashboard event mappings, and it is stored exactly as you send it. If you used one of the old payment types, pass it in uppercase exactly as before (for example `FIRST_PAYMENT` or `DEFAULT`), so your existing mappings, reports and partner templates keep working with no change. A different spelling such as `first_payment` is a new payment type. If you pick a new name such as `purchase`, add a mapping for it in the dashboard before you release, or those payments are not sent to ad networks. `capturePayment` without a type was stored as `DEFAULT`.
+
 ## [4.3.0] - 2026-10-12
 
 ### Changed
