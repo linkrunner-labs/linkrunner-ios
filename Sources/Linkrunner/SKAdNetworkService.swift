@@ -9,7 +9,8 @@ import AdAttributionKit
 /// Attribution service that handles both modern AdAttributionKit (iOS 17.4+) and legacy SKAdNetwork (iOS 14.0+)
 /// Automatically selects the appropriate API based on iOS version availability
 @available(iOS 14.0, *)
-public class SKAdNetworkService {
+// All work runs on `serialQueue`, and the only stored state is immutable.
+public class SKAdNetworkService: @unchecked Sendable {
     public static let shared = SKAdNetworkService()
     
     // Thread safety
