@@ -928,7 +928,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "IOS",
             "source": source,
             "install_instance_id": installInstanceId,
-            "debug": debug
+            "debug": debug as Any
         ]
         
         if let link = link {

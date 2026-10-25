@@ -50,27 +50,20 @@ public class RequestSigningInterceptor: NSObject {
             return request
         }
         
-        // Attempt to sign the request, but don't block the request if signing fails
-        do {
-            var requestBody: String? = nil
-            
-            if let bodyData = request.httpBody {
-                requestBody = String(data: bodyData, encoding: .utf8)
-            }
-            
-            let signedData = generator.signRequest(payload: requestBody)
-            
-            let signedRequest = addSignatureHeaders(
-                originalRequest: request,
-                signature: signedData.signature,
-                timestamp: signedData.timestamp,
-                keyId: signedData.keyId
-            )
-            
-            return signedRequest
-        } catch {
-            return request
+        var requestBody: String? = nil
+        
+        if let bodyData = request.httpBody {
+            requestBody = String(data: bodyData, encoding: .utf8)
         }
+        
+        let signedData = generator.signRequest(payload: requestBody)
+        
+        return addSignatureHeaders(
+            originalRequest: request,
+            signature: signedData.signature,
+            timestamp: signedData.timestamp,
+            keyId: signedData.keyId
+        )
     }
     
     // MARK: - Private Methods

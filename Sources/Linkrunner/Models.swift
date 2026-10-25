@@ -37,8 +37,7 @@ extension LinkrunnerError: LocalizedError {
 }
 
 // Sendable dictionary type alias
-public typealias SendableDictionary = [String: Any] 
-extension SendableDictionary: @unchecked Sendable {}
+public typealias SendableDictionary = [String: Any]
 
 // MARK: - Consent
 
