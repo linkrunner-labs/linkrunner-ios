@@ -23,12 +23,12 @@ import AdServices
 @available(iOS 15.0, *)
 public class LinkrunnerSDK: @unchecked Sendable {
     // Configuration options
-    private var hashPII: Bool = false
-    private var disableIdfa: Bool = false
-    private var debug: Bool = false
+    @Synchronized private var hashPII: Bool = false
+    @Synchronized private var disableIdfa: Bool = false
+    @Synchronized private var debug: Bool = false
     
     // Define a Sendable device data structure
-    private struct DeviceData: Sendable {
+    struct DeviceData: Sendable {
         var device: String
         /// Hardware model identifier, e.g. "iPhone17,3". Distinct from `device`, which
         /// is the generic family string ("iPhone") that UIDevice reports. Google's
@@ -107,7 +107,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     // Network monitoring properties
 #if canImport(Network)
-    private var networkMonitor: NWPathMonitor?
+    @Synchronized private var networkMonitor: NWPathMonitor? = nil
     @Synchronized private var currentConnectionType: String? = nil
 #endif
     public static let shared = LinkrunnerSDK()
@@ -117,7 +117,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     @Synchronized private var keyId: String? = nil
 
     // Time tracking for SKAN
-    private var appInstallTime: Date?
+    @Synchronized private var appInstallTime: Date? = nil
 
     // Google Ads consent, supplied by the host app's CMP. Restored from storage in init
     // so a returning user keeps their state without the app re-supplying it. Defaults to
@@ -130,7 +130,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
 
     /// When enabled, consent is read from an IAB TCF CMP's `IABTCF_*` keys for any
     /// signal the app has not set explicitly. Opt-in — see `enableTCFConsentCollection`.
-    private var tcfConsentCollectionEnabled = false
+    @Synchronized private var tcfConsentCollectionEnabled = false
 
     /// Resolved once during `initialize` and reused for every subsequent payload.
     /// Never logged — see ODMService.
@@ -157,13 +157,19 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
 #if canImport(Network)
     private func setupNetworkMonitoring() {
-        networkMonitor = NWPathMonitor()
+        let monitor = NWPathMonitor()
+        let isNew = $networkMonitor.withLock { current -> Bool in
+            guard current == nil else { return false }
+            current = monitor
+            return true
+        }
+        guard isNew else { return }
         let queue = DispatchQueue(label: "NetworkMonitoring")
         
         // Initialize the connection type before starting the monitor
         self.currentConnectionType = "unknown"
         
-        networkMonitor?.pathUpdateHandler = { [weak self] path in
+        monitor.pathUpdateHandler = { [weak self] path in
             // Only check interface type when status is satisfied to avoid warnings
             if path.status == .satisfied {
                 // Use a local variable to determine the connection type
@@ -187,7 +193,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             }
         }
         
-        networkMonitor?.start(queue: queue)
+        monitor.start(queue: queue)
     }
 #endif
     
@@ -226,9 +232,11 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// - Parameter consent: consent signals from your Consent Management Platform.
     ///   See ``LinkrunnerConsent`` for what each signal means.
     public func setConsent(_ consent: LinkrunnerConsent) {
-        guard consent != self.consent else { return }
-        self.consent = consent
-        persistConsent(consent)
+        $consent.withLock { current in
+            guard consent != current else { return }
+            current = consent
+            persistConsent(consent)
+        }
     }
 
     /// Collect Google Ads consent automatically from an IAB TCF v2.2/2.3 Consent
@@ -258,6 +266,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// CMP may not have resolved yet, so an early read would pin `.unknown` for the
     /// life of the process.
     private func resolveConsent() -> LinkrunnerConsent {
+        let consent = self.consent
         guard tcfConsentCollectionEnabled else { return consent }
 
         let tcf = TCFConsent.read()
@@ -280,15 +289,17 @@ public class LinkrunnerSDK: @unchecked Sendable {
         self.debug = debug ?? false
 
         // Set app install time on first initialization
-        if appInstallTime == nil {
-            appInstallTime = getAppInstallTime()
-
+        let firstInstallTime = $appInstallTime.withLock { current -> Date? in
+            guard current == nil else { return nil }
+            let installTime = getAppInstallTime()
+            current = installTime
+            return installTime
+        }
+        if let appInstallTime = firstInstallTime {
             // Hand Google the same persisted install time Linkrunner already uses, so
             // the value is stable across launches instead of drifting each run.
             // Must happen before any conversion info is fetched.
-            if let appInstallTime = appInstallTime {
-                ODMService.shared.setFirstLaunchTime(appInstallTime)
-            }
+            ODMService.shared.setFirstLaunchTime(appInstallTime)
 
             // Initialize SKAN with default values (0/low) on first init
             await SKAdNetworkService.shared.registerInitialConversionValue()
@@ -976,24 +987,26 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// it per request meant repeating that work on every event and payment call.
     /// A nil result is not cached, so a token that isn't ready yet is retried.
     /// - Returns: Attribution token string if available, nil otherwise
-    private func getAttributionToken() async -> String? {
-        if let cachedAttributionToken = cachedAttributionToken {
-            return cachedAttributionToken
-        }
-        #if canImport(AdServices)
-        do {
-            let token = try AAAttribution.attributionToken()
-            cachedAttributionToken = token
-            return token
-        } catch {
-            #if DEBUG
-            print("Linkrunner: Failed to get attribution token: \(error)")
-            #endif
+    func getAttributionToken() async -> String? {
+        $cachedAttributionToken.withLock { cached -> String? in
+            if let cached = cached {
+                return cached
+            }
+            #if canImport(AdServices)
+            do {
+                let token = try AAAttribution.attributionToken()
+                cached = token
+                return token
+            } catch {
+                #if DEBUG
+                print("Linkrunner: Failed to get attribution token: \(error)")
+                #endif
+                return nil
+            }
+            #else
             return nil
+            #endif
         }
-        #else
-        return nil
-        #endif
     }
 
     /// Hardware model identifier, e.g. "iPhone17,3".
@@ -1206,7 +1219,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
 
 @available(iOS 15.0, *)
 extension LinkrunnerSDK {
-    private func deviceData() async -> DeviceData {
+    func deviceData() async -> DeviceData {
         // Create a Sendable wrapper using Task isolation to convert to a Sendable result
         return await Task { () -> DeviceData in
 #if canImport(UIKit)
@@ -1433,7 +1446,7 @@ extension LinkrunnerSDK {
 
     /// Reads consent stored by a previous session. Missing keys read back as `.unknown`,
     /// so an app that has never called `setConsent` is reported as unknown, not granted.
-    fileprivate static func loadPersistedConsent() -> LinkrunnerConsent {
+    static func loadPersistedConsent() -> LinkrunnerConsent {
         let defaults = UserDefaults.standard
         func status(_ key: String) -> ConsentStatus {
             guard let raw = defaults.string(forKey: key) else { return .unknown }

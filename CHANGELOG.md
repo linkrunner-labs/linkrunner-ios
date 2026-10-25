@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed a launch-time `EXC_BAD_ACCESS` crash when `initialize`, `setUserData` and `trackEvent` run at the same time. Since 4.1.0 the AdServices attribution token was cached in a shared property without a lock, so one call could free the token while another was still reading it. The token cache, `odm_info`, consent, the project token, signing keys and connection type are now read and written under a lock. No API changes.
+- Fixed a launch-time `EXC_BAD_ACCESS` crash when `initialize`, `setUserData`, `trackEvent` or other calls run at the same time. Since 4.1.0 the AdServices attribution token was cached in a shared property without a lock, so one call could free the token while another was still reading it. Every piece of state the SDK shares across calls (token cache, `odm_info`, consent, project token, signing keys, PII hashing, IDFA and debug flags, install time, connection type and the request signer) is now read and written under a lock, and the AdServices token is fetched once even when several calls need it at launch. No API changes.
 
 ## [4.3.0] - 2026-10-12
 
