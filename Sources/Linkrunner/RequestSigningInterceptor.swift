@@ -8,7 +8,8 @@ public class RequestSigningInterceptor: NSObject {
     private static let KEY_ID_HEADER = "x-Key-Id"
     
     // MARK: - Properties
-    private var generator: HmacSignatureGenerator?
+    // Set from initialize while other calls are signing requests on other threads.
+    @Synchronized private var generator: HmacSignatureGenerator? = nil
     
     // Dedicated URLSession for the SDK to avoid interference with app's networking
     private let sdkSession: URLSession
@@ -62,7 +63,8 @@ public class RequestSigningInterceptor: NSObject {
             let signedRequest = addSignatureHeaders(
                 originalRequest: request,
                 signature: signedData.signature,
-                timestamp: signedData.timestamp
+                timestamp: signedData.timestamp,
+                keyId: signedData.keyId
             )
             
             return signedRequest
@@ -78,15 +80,17 @@ public class RequestSigningInterceptor: NSObject {
     ///   - originalRequest: The original request
     ///   - signature: The generated signature
     ///   - timestamp: The timestamp used for signing
+    ///   - keyId: The key ID the signature was made with
     /// - Returns: A new request with signature headers
     private func addSignatureHeaders(
         originalRequest: URLRequest,
         signature: String,
-        timestamp: Int64
+        timestamp: Int64,
+        keyId: String
     ) -> URLRequest {
         var request = originalRequest
         request.setValue("HMAC", forHTTPHeaderField: RequestSigningInterceptor.AUTHORIZATION_HEADER)
-        request.setValue(generator?.signRequest(payload: nil).keyId, forHTTPHeaderField: RequestSigningInterceptor.KEY_ID_HEADER)
+        request.setValue(keyId, forHTTPHeaderField: RequestSigningInterceptor.KEY_ID_HEADER)
         request.setValue(String(timestamp), forHTTPHeaderField: RequestSigningInterceptor.TIMESTAMP_HEADER)
         request.setValue(signature, forHTTPHeaderField: RequestSigningInterceptor.SIGNATURE_HEADER)
         return request
