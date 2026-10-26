@@ -407,6 +407,19 @@ public struct IntegrationData: Sendable {
     }
 }
 
+@available(*, deprecated, message: "Pass the payment name as the trackEvent eventName, for example \"FIRST_PAYMENT\"")
+public enum PaymentType: String, Sendable {
+    case firstPayment = "FIRST_PAYMENT"
+    case secondPayment = "SECOND_PAYMENT"
+    case walletTopup = "WALLET_TOPUP"
+    case fundsWithdrawal = "FUNDS_WITHDRAWAL"
+    case subscriptionCreated = "SUBSCRIPTION_CREATED"
+    case subscriptionRenewed = "SUBSCRIPTION_RENEWED"
+    case oneTime = "ONE_TIME"
+    case recurring = "RECURRING"
+    case `default` = "DEFAULT"
+}
+
 public enum PaymentStatus: String, Sendable {
     case initiated = "PAYMENT_INITIATED"
     case completed = "PAYMENT_COMPLETED"
@@ -503,6 +516,20 @@ struct InAppPayment: Equatable {
 }
 
 // MARK: - API Response Models
+
+/// Response model for capture-payment endpoint
+@available(*, deprecated, message: "capture-payment is replaced by trackEvent payments")
+public struct CapturePaymentResponse: Codable, Sendable {
+    public let success: Bool
+    public let message: String
+    public let data: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case success
+        case message
+        case data
+    }
+}
 
 /// Response model for capture-event endpoint
 public struct CaptureEventResponse: Codable, Sendable {

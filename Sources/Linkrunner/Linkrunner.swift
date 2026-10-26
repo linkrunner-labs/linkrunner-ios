@@ -634,6 +634,138 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
+    /// Capture a payment
+    /// - Parameters:
+    ///   - amount: Payment amount
+    ///   - userId: User identifier
+    ///   - paymentId: Payment identifier (required)
+    ///   - type: Optional payment type
+    ///   - status: Optional payment status
+    ///   - eventData: Optional event data
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    @available(*, deprecated, message: "Use trackEvent(eventName:eventData:) with amount, paymentId and currency in eventData")
+    public func capturePayment(
+        amount: Double,
+        userId: String,
+        paymentId: String,
+        type: PaymentType = .default,
+        status: PaymentStatus = .completed,
+        eventData: SendableDictionary? = nil
+    ) async {
+        guard let token = self.token else {
+            #if DEBUG
+            print("Linkrunner: capturePayment failed - SDK not initialized")
+            #endif
+            return
+        }
+
+        guard !paymentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            #if DEBUG
+            print("Linkrunner: capturePayment failed - paymentId is required")
+            #endif
+            return
+        }
+
+        let resolvedUserId = userId.isEmpty ? (getUserId() ?? "") : userId
+
+        var requestData: SendableDictionary = [
+            "token": token,
+            "user_id": resolvedUserId,
+            "platform": "IOS",
+            "amount": amount,
+            "event_data": eventData as Any,
+            "install_instance_id": await getLinkRunnerInstallInstanceId(),
+            "time_since_app_install": getTimeSinceAppInstall(),
+            "payment_id": paymentId,
+        ]
+
+        requestData["type"] = type.rawValue
+        requestData["status"] = status.rawValue
+        
+        var dataDict: SendableDictionary = [:]
+        dataDict["device_data"] = (await deviceData()).toDictionary()
+        requestData["data"] = dataDict
+        
+        do {
+            let response = try await makeRequest(
+                endpoint: "/api/client/capture-payment",
+                body: requestData
+            )
+            
+            // Process SKAN conversion values from response in background
+            await processSKANResponse(response, source: "payment")
+            
+            #if DEBUG
+            print("Linkrunner: Payment captured successfully ", [
+                "amount": amount,
+                "paymentId": paymentId,
+                "userId": resolvedUserId,
+                "type": type.rawValue,
+                "status": status.rawValue
+            ] as [String: Any])
+            #endif
+        } catch {
+            #if DEBUG
+            print("Linkrunner: capturePayment failed with error: \(error)")
+            #endif
+        }
+    }
+    
+    /// Remove a captured payment
+    /// - Parameters:
+    ///   - userId: User identifier
+    ///   - paymentId: Optional payment identifier
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    @available(*, deprecated, message: "Send the same paymentId with status PAYMENT_CANCELLED through trackEvent(eventName:eventData:)")
+    public func removePayment(userId: String, paymentId: String? = nil) async {
+        guard let token = self.token else {
+            #if DEBUG
+            print("Linkrunner: removePayment failed - SDK not initialized")
+            #endif
+            return
+        }
+        
+        if paymentId == nil && userId.isEmpty {
+            #if DEBUG
+            print("Linkrunner: removePayment failed - Either paymentId or userId must be provided")
+            #endif
+            return
+        }
+        
+        var requestData: SendableDictionary = [
+            "token": token,
+            "user_id": userId,
+            "platform": "IOS",
+            "install_instance_id": await getLinkRunnerInstallInstanceId()
+        ]
+        
+        if let paymentId = paymentId {
+            requestData["payment_id"] = paymentId
+        }
+        
+        var dataDict: SendableDictionary = [:]
+        dataDict["device_data"] = (await deviceData()).toDictionary()
+        requestData["data"] = dataDict
+        
+        do {
+            _ = try await makeRequest(
+                endpoint: "/api/client/remove-captured-payment",
+                body: requestData
+            )
+            
+            #if DEBUG
+            print("Linkrunner: Payment entry removed successfully!", [
+                "paymentId": paymentId ?? "N/A",
+                "userId": userId
+            ] as [String: Any])
+            #endif
+        } catch {
+            #if DEBUG
+            print("Linkrunner: removePayment failed with error: \(error)")
+            #endif
+        }
+    }
+    
     /// Update the push notification token for the current user
     /// - Parameter pushToken: The push notification token to be associated with the user
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)

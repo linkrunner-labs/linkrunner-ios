@@ -13,16 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `eventData` without `paymentId` is a custom event, sent exactly as in 4.x, including any `amount` or `currency` keys.
 - `paymentId` without `amount` or `currency`, or an invalid payment field, is not sent, and the reason is printed in debug builds.
 
-### Removed
+### Deprecated
 
-- `capturePayment`, `removePayment`, `PaymentType` and `CapturePaymentResponse`. Send payments with `trackEvent`. There is no replacement for removing a payment; send the same `paymentId` with `.cancelled` for a refund.
+- `capturePayment`, `removePayment`, `PaymentType` and `CapturePaymentResponse`. They still work as in 4.x on the old endpoints and will be removed in a future major version. Send new payments with `trackEvent`. For a refund, send the same `paymentId` with `.cancelled` instead of `removePayment`.
 
 ### Migration
 
 Rename `capturePayment` to `trackEvent`, pass the old type as the event name with the exact same spelling, and move the fields into `eventData` with a new `currency`.
 
 ```swift
-// 4.x
+// 4.x (deprecated in 5.0.0)
 await LinkrunnerSDK.shared.capturePayment(amount: 499, userId: "user_1", paymentId: "ord_1", type: .firstPayment)
 
 // 5.0.0
