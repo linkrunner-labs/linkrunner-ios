@@ -41,6 +41,18 @@ await LinkrunnerSDK.shared.trackEvent(
 ### Payment names and dashboard mappings
 
 The event name you pass becomes the payment type in reports and in your dashboard event mappings, and it is stored exactly as you send it. If you used one of the old payment types, pass it in uppercase exactly as before (for example `FIRST_PAYMENT` or `DEFAULT`), so your existing mappings, reports and partner templates keep working with no change. A different spelling such as `first_payment` is a new payment type. If you pick a new name such as `purchase`, add a mapping for it in the dashboard before you release, or those payments are not sent to ad networks. `capturePayment` without a type was stored as `DEFAULT`.
+## [4.3.2] - 2026-11-02
+
+### Fixed
+
+- Fixed SKAdNetwork postbacks arriving with no conversion value on iOS 17.4 and above. Since 4.1.0 the SDK called only `AdAttributionKit.Postback.updateConversionValue` on those versions and returned. Apple bridges SKAdNetwork into AdAttributionKit but never the reverse, so ads signed by SKAdNetwork networks such as Meta and Google produced postbacks with the conversion value missing, and campaigns optimising on those events received nothing. The SDK now calls both `Postback.updateConversionValue` and `SKAdNetwork.updatePostbackConversionValue` on iOS 17.4 and above. Apps below 17.4 are unchanged, and there are no API changes.
+
+## [4.3.1] - 2026-10-25
+
+### Fixed
+
+- Fixed a launch-time `EXC_BAD_ACCESS` crash when `initialize`, `setUserData`, `trackEvent` or other calls run at the same time. Since 4.1.0 the AdServices attribution token was cached in a shared property without a lock, so one call could free the token while another was still reading it. Every piece of state the SDK shares across calls (token cache, `odm_info`, consent, project token, signing keys, PII hashing, IDFA and debug flags, install time, connection type and the request signer) is now read and written under a lock, and the AdServices token is fetched once even when several calls need it at launch. No API changes.
+- Fixed the 5 compiler warnings `pod lib lint` reported, so the pod passes validation without `--allow-warnings`. No behavior changes.
 
 ## [4.3.0] - 2026-10-12
 

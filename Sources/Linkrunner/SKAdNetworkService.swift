@@ -9,7 +9,8 @@ import AdAttributionKit
 /// Attribution service that handles both modern AdAttributionKit (iOS 17.4+) and legacy SKAdNetwork (iOS 14.0+)
 /// Automatically selects the appropriate API based on iOS version availability
 @available(iOS 14.0, *)
-public class SKAdNetworkService {
+// All work runs on `serialQueue`, and the only stored state is immutable.
+public class SKAdNetworkService: @unchecked Sendable {
     public static let shared = SKAdNetworkService()
     
     // Thread safety
@@ -177,17 +178,18 @@ public class SKAdNetworkService {
     ) {
         #if canImport(AdAttributionKit)
         if #available(iOS 17.4, *) {
-            // iOS 17.4+ use AdAttributionKit for registration
+            // Apple bridges SKAdNetwork into AdAttributionKit but never the reverse, so
+            // SKAN-signed networks (Meta, Google) still need the SKAdNetwork call below.
+            // Calling only AdAttributionKit leaves their postbacks with no conversion value.
             self.updateWithAdAttributionKit(
                 fineValue: fineValue,
                 coarseValue: coarseValue,
                 lockWindow: lockWindow,
-                completion: completion
+                completion: { _ in }
             )
-            return
         }
         #endif
-        
+
         if #available(iOS 16.1, *) {
             // iOS 16.1+ supports coarse value and lock window in registration
             self.registerWithCoarseValue(
@@ -217,17 +219,18 @@ public class SKAdNetworkService {
     ) {
         #if canImport(AdAttributionKit)
         if #available(iOS 17.4, *) {
-            // iOS 17.4+ use AdAttributionKit (modern approach)
+            // Apple bridges SKAdNetwork into AdAttributionKit but never the reverse, so
+            // SKAN-signed networks (Meta, Google) still need the SKAdNetwork call below.
+            // Calling only AdAttributionKit leaves their postbacks with no conversion value.
             self.updateWithAdAttributionKit(
                 fineValue: fineValue,
                 coarseValue: coarseValue,
                 lockWindow: lockWindow,
-                completion: completion
+                completion: { _ in }
             )
-            return
         }
         #endif
-        
+
         if #available(iOS 16.1, *) {
             // iOS 16.1+ supports all parameters with SKAdNetwork
             if let coarseValue = coarseValue {
