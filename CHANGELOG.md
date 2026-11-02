@@ -5,6 +5,12 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.2] - 2026-11-02
+
+### Fixed
+
+- Fixed SKAdNetwork postbacks arriving with no conversion value on iOS 17.4 and above. Since 4.1.0 the SDK called only `AdAttributionKit.Postback.updateConversionValue` on those versions and returned. Apple bridges SKAdNetwork into AdAttributionKit but never the reverse, so ads signed by SKAdNetwork networks such as Meta and Google produced postbacks with the conversion value missing, and campaigns optimising on those events received nothing. The SDK now calls both `Postback.updateConversionValue` and `SKAdNetwork.updatePostbackConversionValue` on iOS 17.4 and above. Apps below 17.4 are unchanged, and there are no API changes.
+
 ## [4.3.1] - 2026-10-25
 
 ### Fixed

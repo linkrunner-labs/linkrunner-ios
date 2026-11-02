@@ -178,17 +178,18 @@ public class SKAdNetworkService: @unchecked Sendable {
     ) {
         #if canImport(AdAttributionKit)
         if #available(iOS 17.4, *) {
-            // iOS 17.4+ use AdAttributionKit for registration
+            // Apple bridges SKAdNetwork into AdAttributionKit but never the reverse, so
+            // SKAN-signed networks (Meta, Google) still need the SKAdNetwork call below.
+            // Calling only AdAttributionKit leaves their postbacks with no conversion value.
             self.updateWithAdAttributionKit(
                 fineValue: fineValue,
                 coarseValue: coarseValue,
                 lockWindow: lockWindow,
-                completion: completion
+                completion: { _ in }
             )
-            return
         }
         #endif
-        
+
         if #available(iOS 16.1, *) {
             // iOS 16.1+ supports coarse value and lock window in registration
             self.registerWithCoarseValue(
@@ -218,17 +219,18 @@ public class SKAdNetworkService: @unchecked Sendable {
     ) {
         #if canImport(AdAttributionKit)
         if #available(iOS 17.4, *) {
-            // iOS 17.4+ use AdAttributionKit (modern approach)
+            // Apple bridges SKAdNetwork into AdAttributionKit but never the reverse, so
+            // SKAN-signed networks (Meta, Google) still need the SKAdNetwork call below.
+            // Calling only AdAttributionKit leaves their postbacks with no conversion value.
             self.updateWithAdAttributionKit(
                 fineValue: fineValue,
                 coarseValue: coarseValue,
                 lockWindow: lockWindow,
-                completion: completion
+                completion: { _ in }
             )
-            return
         }
         #endif
-        
+
         if #available(iOS 16.1, *) {
             // iOS 16.1+ supports all parameters with SKAdNetwork
             if let coarseValue = coarseValue {
