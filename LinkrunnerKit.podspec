@@ -1,11 +1,11 @@
 Pod::Spec.new do |s|
   s.name             = 'LinkrunnerKit'
   s.version          = '5.0.0'
-  s.summary          = 'AI‑powered Mobile Measurement SDK.'
+  s.summary          = 'Linkrunner MMP SDK for iOS: install attribution, deferred deep linking, in-app events, revenue and SKAN.'
   s.description      = <<-DESC
-    Native Swift SDK for Linkrunner.io—attribution, event & payment tracking.
+    Native Swift SDK for Linkrunner, the mobile measurement partner (MMP): install attribution, deferred deep linking, in-app event and revenue tracking, and SKAdNetwork conversion values.
   DESC
-  s.homepage         = 'https://github.com/linkrunner-labs/linkrunner-ios'
+  s.homepage         = 'https://docs.linkrunner.io/sdk/ios'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { 'Linkrunner' => 'darshil@linkrunner.io' }
   s.platform         = :ios, '15.0'
