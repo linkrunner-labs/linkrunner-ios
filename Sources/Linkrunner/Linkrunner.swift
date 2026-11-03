@@ -560,13 +560,17 @@ public class LinkrunnerSDK: @unchecked Sendable {
         }
     }
     
-    /// Track a custom event
+    /// Track an in-app event. Put amount, paymentId and currency in eventData to record it as a payment.
     /// - Parameters:
-    ///   - eventName: Name of the event
-    ///   - eventData: Optional event data
+    ///   - eventName: Name of the event; for a payment it is the payment type in reports and mappings
+    ///   - eventData: Optional event data; a payment also needs userId, and status defaults to PAYMENT_COMPLETED
     ///   - eventId: Optional unique identifier to deduplicate events server-side
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func trackEvent(eventName: String, eventData: SendableDictionary? = nil, eventId: String? = nil) async {
+    public func trackEvent(
+        eventName: String,
+        eventData: SendableDictionary? = nil,
+        eventId: String? = nil
+    ) async {
         guard let token = self.token else {
             #if DEBUG
             print("Linkrunner: trackEvent failed - SDK not initialized")
@@ -581,10 +585,23 @@ public class LinkrunnerSDK: @unchecked Sendable {
             return
         }
         
+        let payment: InAppPayment?
+        let sentEventData: SendableDictionary?
+        switch InAppPayment.extract(eventData) {
+        case .success(let split):
+            payment = split.payment
+            sentEventData = split.eventData
+        case .failure(let failure):
+            #if DEBUG
+            print("Linkrunner: trackEvent failed - \(failure)")
+            #endif
+            return
+        }
+
         var requestData: SendableDictionary = [
             "token": token,
             "event_name": eventName,
-            "event_data": eventData as Any,
+            "event_data": sentEventData as Any,
             "device_data": (await deviceData()).toDictionary(),
             "install_instance_id": await getLinkRunnerInstallInstanceId(),
             "time_since_app_install": getTimeSinceAppInstall(),
@@ -595,8 +612,18 @@ public class LinkrunnerSDK: @unchecked Sendable {
             requestData["event_id"] = eventId
         }
 
-        if let userId = getUserId(), !userId.isEmpty {
+        let userId = getUserId().flatMap { $0.isEmpty ? nil : $0 }
+        if let userId = userId {
             requestData["user_id"] = userId
+        }
+
+        if let payment = payment {
+            requestData.merge(payment.requestFields) { _, new in new }
+            #if DEBUG
+            if userId == nil && payment.userId.isEmpty {
+                print("Linkrunner: payment event \(eventName) sent without a user id; pass userId or call signup or setUserData first")
+            }
+            #endif
         }
 
         do {
@@ -627,6 +654,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     ///   - status: Optional payment status
     ///   - eventData: Optional event data
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    @available(*, deprecated, message: "Use trackEvent(eventName:eventData:) with amount, paymentId and currency in eventData")
     public func capturePayment(
         amount: Double,
         userId: String,
@@ -699,6 +727,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     ///   - userId: User identifier
     ///   - paymentId: Optional payment identifier
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    @available(*, deprecated, message: "Send the same paymentId with status PAYMENT_CANCELLED through trackEvent(eventName:eventData:)")
     public func removePayment(userId: String, paymentId: String? = nil) async {
         guard let token = self.token else {
             #if DEBUG
@@ -1207,7 +1236,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "4.3.2" // Swift package version
+        return "5.0.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
