@@ -1,0 +1,50 @@
+name: Claude Code Review
+
+on:
+    pull_request:
+        types: [opened, synchronize, ready_for_review, reopened]
+
+concurrency:
+    group: claude-review-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+
+jobs:
+    claude-review:
+        if: github.event.pull_request.draft == false
+        runs-on: macos-latest
+        permissions:
+            contents: read
+            pull-requests: write
+            issues: write
+            id-token: write
+            actions: read # Lets the reviewer read CI results via the github_ci MCP server
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            # The reviewer is expected to run the unit tests itself (see CLAUDE.md). The package
+            # only targets iOS, so that needs Xcode and a simulator, which the macOS runner image
+            # ships. macOS minutes are free on this public repo.
+            # Warms DerivedData so the reviewer's own test run is fast. A failure here is the
+            # PR's to explain, not a reason to skip the review.
+            - name: Warm up the build and run unit tests
+              continue-on-error: true
+              run: Scripts/test.sh
+            - name: Run Claude Code Review
+              id: claude-review
+              uses: anthropics/claude-code-action@v1
+              with:
+                  claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+                  plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+                  plugins: "code-review@claude-code-plugins"
+                  track_progress: true
+                  prompt: "/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+                  # Tool grants come from .claude/settings.json through the action's
+                  # documented `settings` input; the action does not discover the file
+                  # by itself. Do not use --allowedTools in claude_args (SDK crash,
+                  # linkrunner-backend #472).
+                  settings: .claude/settings.json
+                  claude_args: '--model claude-opus-5 --effort xhigh'
