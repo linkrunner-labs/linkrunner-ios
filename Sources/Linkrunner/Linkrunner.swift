@@ -25,6 +25,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
     // Configuration options
     @Synchronized private var hashPII: Bool = false
     @Synchronized private var disableIdfa: Bool = false
+    /// Drops every device-level identifier; see `initialize(privacyMode:)`. Restored
+    /// from storage in init so it holds before `initialize` runs on a later launch.
+    @Synchronized private var privacyMode: Bool
     @Synchronized private var debug: Bool = false
     
     // Define a Sendable device data structure
@@ -60,6 +63,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         var firstOpenTimestamp: Double?
         var attStatus: String?
         var consent: LinkrunnerConsent?
+        var privacyMode: Bool = false
 
         struct DisplayData: Sendable {
             var width: Double
@@ -101,6 +105,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             if let firstOpenTimestamp = firstOpenTimestamp { dict["first_open_timestamp"] = firstOpenTimestamp }
             if let attStatus = attStatus { dict["att_status"] = attStatus }
             if let consent = consent, !consent.isEmpty { dict["consent"] = consent.toDictionary() }
+            if privacyMode { dict["privacy_mode"] = true }
 
             return dict
         }
@@ -199,6 +204,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     private init() {
         self.consent = LinkrunnerSDK.loadPersistedConsent()
+        self.privacyMode = UserDefaults.standard.bool(forKey: LinkrunnerSDK.PRIVACY_MODE_KEY)
 #if canImport(Network)
         setupNetworkMonitoring()
 #endif
@@ -281,9 +287,20 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
 
     /// Initialize the Linkrunner SDK with your project token
-    /// - Parameter token: Your Linkrunner project token
+    /// - Parameters:
+    ///   - token: Your Linkrunner project token
+    ///   - privacyMode: Stop collecting device-level identifiers: IDFA (and the ATT
+    ///     prompt), IDFV, the device name and Google ODM, and skip SKAdNetwork
+    ///     conversion updates. Only the SDK-generated install instance ID identifies
+    ///     the install. Use it for apps directed at children. The value is persisted:
+    ///     `true` stays on until you initialize with `false`, and `nil` keeps the
+    ///     stored value (off by default).
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
-    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil, disableIdfa: Bool? = false, debug: Bool? = false) async {
+    public func initialize(token: String, secretKey: String? = nil, keyId: String? = nil, disableIdfa: Bool? = false, debug: Bool? = false, privacyMode: Bool? = nil) async {
+        // Applied before the token, so no request can be built with the old value.
+        if let privacyMode = privacyMode {
+            setPrivacyMode(privacyMode)
+        }
         self.token = token
         self.disableIdfa = disableIdfa ?? false
         self.debug = debug ?? false
@@ -295,7 +312,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             current = installTime
             return installTime
         }
-        if let appInstallTime = firstInstallTime {
+        if let appInstallTime = firstInstallTime, !self.privacyMode {
             // Hand Google the same persisted install time Linkrunner already uses, so
             // the value is stable across launches instead of drifting each run.
             // Must happen before any conversion info is fetched.
@@ -309,7 +326,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
         // backend forwards as `first_open`. Bounded, and never fatal: on empty,
         // error or timeout we omit `odm_info` and carry on. Initialization must
         // never permanently depend on Google being reachable.
-        await resolveODMInfo()
+        if !self.privacyMode {
+            await resolveODMInfo()
+        }
 
         // Only set secretKey and keyId when they are provided
         if let secretKey = secretKey, let keyId = keyId, !secretKey.isEmpty, !keyId.isEmpty {
@@ -322,6 +341,17 @@ public class LinkrunnerSDK: @unchecked Sendable {
         await initApiCall(token: token, source: "GENERAL", debug: debug)
     }
     
+    /// Whether privacy mode is on, as set by the last `initialize` that passed it.
+    public func isPrivacyModeEnabled() -> Bool {
+        privacyMode
+    }
+
+    /// Sets and persists privacy mode. Internal so tests can drive it without a network call.
+    func setPrivacyMode(_ enabled: Bool) {
+        privacyMode = enabled
+        UserDefaults.standard.set(enabled, forKey: LinkrunnerSDK.PRIVACY_MODE_KEY)
+    }
+
     /// Enables or disables hashing of personally identifiable information (PII)
     /// - Parameter enabled: Whether PII hashing should be enabled
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
@@ -524,7 +554,18 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     /// Request App Tracking Transparency permission
     /// - Parameter completionHandler: Optional callback with the authorization status
+    ///
+    /// In privacy mode this never shows the prompt and reports the current status.
     public func requestTrackingAuthorization(completionHandler: (@Sendable (ATTrackingManager.AuthorizationStatus) -> Void)? = nil) {
+        if privacyMode {
+            let status = ATTrackingManager.trackingAuthorizationStatus
+            if let completionHandler = completionHandler {
+                Task { @MainActor in
+                    completionHandler(status)
+                }
+            }
+            return
+        }
         DispatchQueue.main.async {
 #if canImport(AppTrackingTransparency)
             ATTrackingManager.requestTrackingAuthorization { status in
@@ -1236,7 +1277,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "5.0.0" // Swift package version
+        return "5.1.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
@@ -1255,7 +1296,14 @@ extension LinkrunnerSDK {
             // Device info
             let currentDevice = await UIDevice.current
             let deviceModel = await currentDevice.model
-            let deviceName = await currentDevice.name
+            let privacyMode = self.privacyMode
+            // The user-assigned device name can contain a child's name; the generic model replaces it.
+            let deviceName: String
+            if privacyMode {
+                deviceName = deviceModel
+            } else {
+                deviceName = await currentDevice.name
+            }
             let systemVersion = await currentDevice.systemVersion
             
             // App info
@@ -1280,8 +1328,9 @@ extension LinkrunnerSDK {
             // Variable for IDFA
             var idfa: String? = nil
             
-            // Advertising ID - only collect if disableIdfa is false
-            if !self.disableIdfa {
+            // Advertising ID - only collect if disableIdfa is false and privacy mode is off.
+            // Privacy mode also guarantees the ATT prompt is never requested here.
+            if !self.disableIdfa && !privacyMode {
 #if canImport(AppTrackingTransparency)
                 if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
                     // Create a continuation to make the async SDK call work in our async function
@@ -1304,8 +1353,10 @@ extension LinkrunnerSDK {
             }
             
             // Device ID (for IDFV)
-            let identifierForVendor = await currentDevice.identifierForVendor
-            let idfv = identifierForVendor?.uuidString
+            var idfv: String? = nil
+            if !privacyMode {
+                idfv = await currentDevice.identifierForVendor?.uuidString
+            }
             
             // Locale info
             let locale = Locale.current
@@ -1349,10 +1400,11 @@ extension LinkrunnerSDK {
                 userAgent: userAgent,
                 installInstanceId: installInstanceId,
                 adservicesAttributionToken: attributionToken,
-                odmInfo: self.odmInfo,
+                odmInfo: self.privacyMode ? nil : self.odmInfo,
                 firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
                 attStatus: self.getATTStatus(),
-                consent: self.resolveConsent()
+                consent: self.resolveConsent(),
+                privacyMode: self.privacyMode
             )
 #else
             // Fallback for non-UIKit platforms
@@ -1381,10 +1433,11 @@ extension LinkrunnerSDK {
                 userAgent: nil,
                 installInstanceId: await getLinkRunnerInstallInstanceId(),
                 adservicesAttributionToken: attributionToken,
-                odmInfo: self.odmInfo,
+                odmInfo: self.privacyMode ? nil : self.odmInfo,
                 firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
                 attStatus: self.getATTStatus(),
-                consent: self.resolveConsent()
+                consent: self.resolveConsent(),
+                privacyMode: self.privacyMode
             )
 #endif
         }.value
@@ -1470,6 +1523,7 @@ extension LinkrunnerSDK {
     // MARK: - Consent Storage
 
     private static let CONSENT_IS_EEA_KEY = "linkrunner_consent_is_eea"
+    static let PRIVACY_MODE_KEY = "linkrunner_privacy_mode"
     private static let CONSENT_AD_USER_DATA_KEY = "linkrunner_consent_ad_user_data"
     private static let CONSENT_AD_PERSONALIZATION_KEY = "linkrunner_consent_ad_personalization"
 
@@ -1527,6 +1581,8 @@ extension LinkrunnerSDK {
     // MARK: - SKAN Response Processing
     
     private func processSKANResponse(_ response: SendableDictionary, source: String) async {
+        // Privacy mode keeps the app out of ad-network attribution APIs.
+        if privacyMode { return }
         // Process SKAN data in background to avoid blocking main thread
         Task.detached(priority: .utility) {
 
