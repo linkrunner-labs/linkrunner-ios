@@ -1093,7 +1093,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         
         do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            request.httpBody = try JSONSerialization.data(
+                withJSONObject: withMetaAnonymousId(body, endpoint: endpoint)
+            )
         } catch {
             throw LinkrunnerError.jsonEncodingFailed
         }
@@ -1116,9 +1118,37 @@ public class LinkrunnerSDK: @unchecked Sendable {
         return jsonResponse
     }
     
+    /// The calls the backend reads the Meta anonymous ID from. Every other endpoint is left
+    /// byte-for-byte as it was.
+    private static let metaAnonymousIdEndpoints: Set<String> = [
+        "/api/client/init",
+        "/api/client/trigger",
+        "/api/client/capture-event",
+        "/api/client/capture-payment",
+        "/api/client/attribution-data"
+    ]
+
+    /// Adds a top-level `meta_anonymous_id` when the host app bundles the Meta SDK and has
+    /// stored an ID. Resolved as the request is sent, so a Meta SDK that starts late is
+    /// picked up by the next call rather than needing an ordering guarantee at launch.
+    private func withMetaAnonymousId(_ body: SendableDictionary, endpoint: String) -> SendableDictionary {
+        guard Self.metaAnonymousIdEndpoints.contains(endpoint),
+              let metaAnonymousId = MetaAnonymousIdReader.read() else {
+            return body
+        }
+
+        var enriched = body
+        enriched["meta_anonymous_id"] = metaAnonymousId
+        return enriched
+    }
+
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     private func makeRequest(endpoint: String, body: SendableDictionary) async throws -> SendableDictionary {
-        return try await makeRequestWithRetry(endpoint: endpoint, body: body, attempt: 0)
+        return try await makeRequestWithRetry(
+            endpoint: endpoint,
+            body: withMetaAnonymousId(body, endpoint: endpoint),
+            attempt: 0
+        )
     }
     
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
@@ -1236,7 +1266,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "5.0.0" // Swift package version
+        return "5.1.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
