@@ -5,6 +5,14 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-11-13
+
+### Added
+
+- `privacyMode` parameter on `initialize` for apps directed at children. When on, the SDK does not collect IDFA or request the ATT prompt (including through `requestTrackingAuthorization`), does not send IDFV, Google ODM info or the user-assigned device name, and skips SKAdNetwork conversion value updates. The SDK-generated install instance ID is the only identifier left. Device metadata (model, OS, locale) and the AdServices attribution token are still sent, and payloads carry `privacy_mode: true`.
+- The value is persisted, so it applies from launch even before `initialize` runs. `true` stays on until `initialize` is called with `false`; leaving it out (`nil`) keeps the stored value. Off by default.
+- `isPrivacyModeEnabled()`.
+
 ## [5.0.0] - 2026-11-03
 
 ### Changed
