@@ -5,6 +5,14 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-11-13
+
+### Added
+
+- The SDK now reads the Meta (Facebook) SDK's anonymous ID when the host app bundles the Meta SDK, and sends it as `meta_anonymous_id` on `init`, `signup`, `trackEvent` and `capturePayment`. The backend forwards it to Meta as `anon_id`, giving Meta the same match key it already has from the Meta SDK on the device. No app code changes and no new dependency: the lookup resolves at runtime and sends nothing when the Meta SDK is absent.
+- The lookup is read only and works in any start-up order. It never calls `AppEvents` or `anonymousID`, so it creates no ID of its own, runs none of Meta's class set-up, and cannot crash a debug build where the Meta SDK has not started. A Meta SDK that starts late is picked up by the next request.
+- Opt out at build time with a `LinkrunnerMetaAnonymousIdCollectionEnabled` Boolean set to `NO` in `Info.plist`. When off, no lookup is made and no `meta_anonymous_id` is sent.
+
 ## [5.0.0] - 2026-11-03
 
 ### Changed
