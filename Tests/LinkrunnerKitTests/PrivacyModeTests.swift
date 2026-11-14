@@ -59,4 +59,26 @@ final class PrivacyModeTests: XCTestCase {
         XCTAssertFalse(UserDefaults.standard.bool(forKey: LinkrunnerSDK.PRIVACY_MODE_KEY))
         XCTAssertFalse(LinkrunnerSDK.shared.isPrivacyModeEnabled())
     }
+
+    func testPrivacyModeDropsMetaAnonymousId() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meta-anon-id-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            MetaAnonymousIdReader.resetForTesting()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        MetaAnonymousIdReader.resetForTesting()
+        MetaAnonymousIdReader.persistedFileDirectoryOverride = directory
+        let json = try JSONSerialization.data(withJSONObject: ["anon_id": "XZ-privacy-test"])
+        try json.write(to: directory.appendingPathComponent("com-facebook-sdk-PersistedAnonymousID.json"))
+
+        LinkrunnerSDK.shared.setPrivacyMode(false)
+        let sent = LinkrunnerSDK.shared.withMetaAnonymousId(["token": "t"], endpoint: "/api/client/capture-event")
+        XCTAssertEqual(sent["meta_anonymous_id"] as? String, "XZ-privacy-test")
+
+        LinkrunnerSDK.shared.setPrivacyMode(true)
+        let dropped = LinkrunnerSDK.shared.withMetaAnonymousId(["token": "t"], endpoint: "/api/client/capture-event")
+        XCTAssertNil(dropped["meta_anonymous_id"], "privacy mode also drops a cached ID")
+    }
 }

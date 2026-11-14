@@ -1172,8 +1172,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// Adds a top-level `meta_anonymous_id` when the host app bundles the Meta SDK and has
     /// stored an ID. Resolved as the request is sent, so a Meta SDK that starts late is
     /// picked up by the next call rather than needing an ordering guarantee at launch.
-    private func withMetaAnonymousId(_ body: SendableDictionary, endpoint: String) -> SendableDictionary {
-        guard Self.metaAnonymousIdEndpoints.contains(endpoint),
+    /// Skipped in privacy mode, which drops every device-level identifier.
+    func withMetaAnonymousId(_ body: SendableDictionary, endpoint: String) -> SendableDictionary {
+        guard !privacyMode,
+              Self.metaAnonymousIdEndpoints.contains(endpoint),
               let metaAnonymousId = MetaAnonymousIdReader.read() else {
             return body
         }
