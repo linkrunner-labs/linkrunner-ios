@@ -5,13 +5,21 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.1.0] - 2026-11-13
+## [5.2.0] - 2026-11-14
 
 ### Added
 
 - The SDK now reads the Meta (Facebook) SDK's anonymous ID when the host app bundles the Meta SDK, and sends it as `meta_anonymous_id` on `init`, `signup`, `trackEvent` and `capturePayment`. The backend forwards it to Meta as `anon_id`, giving Meta the same match key it already has from the Meta SDK on the device. No app code changes and no new dependency: the lookup resolves at runtime and sends nothing when the Meta SDK is absent.
 - The lookup is read only and works in any start-up order. It never calls `AppEvents` or `anonymousID`, so it creates no ID of its own, runs none of Meta's class set-up, and cannot crash a debug build where the Meta SDK has not started. A Meta SDK that starts late is picked up by the next request.
 - Opt out at build time with a `LinkrunnerMetaAnonymousIdCollectionEnabled` Boolean set to `NO` in `Info.plist`. When off, no lookup is made and no `meta_anonymous_id` is sent.
+
+## [5.1.0] - 2026-11-13
+
+### Added
+
+- `privacyMode` parameter on `initialize` for apps directed at children. When on, the SDK does not collect IDFA or request the ATT prompt (including through `requestTrackingAuthorization`), does not send IDFV, Google ODM info or the user-assigned device name, and skips SKAdNetwork conversion value updates. The SDK-generated install instance ID is the only identifier left. Device metadata (model, OS, locale) and the AdServices attribution token are still sent, and payloads carry `privacy_mode: true`.
+- The value is persisted, so it applies from launch even before `initialize` runs. `true` stays on until `initialize` is called with `false`; leaving it out (`nil`) keeps the stored value. Off by default.
+- `isPrivacyModeEnabled()`.
 
 ## [5.0.0] - 2026-11-03
 

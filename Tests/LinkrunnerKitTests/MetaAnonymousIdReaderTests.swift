@@ -1,7 +1,7 @@
 import XCTest
 @testable import LinkrunnerKit
 
-/// Covers `MetaAnonymousIdReader` when the Meta SDK is **not** linked into the app (LIN-5027).
+/// Covers `MetaAnonymousIdReader` when the Meta SDK is **not** linked into the app.
 ///
 /// This is the path most apps take: LinkrunnerKit has no build-time dependency on
 /// `FBSDKCoreKit`, so without it every entry point must degrade to `nil` rather than
