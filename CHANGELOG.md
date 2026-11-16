@@ -5,6 +5,22 @@ All notable changes to the LinkRunner iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.0] - 2026-11-16
+
+### Changed
+
+- `initialize` (the init call), `signup`, `setUserData`, `setCustomerUserId`, `setAdditionalData`, `trackEvent`, `capturePayment`, `removePayment` and `setPushToken` now save the request to an on-device queue and return once it is saved. A single sender delivers the queue in order while the app is running, so events are no longer lost when the app is offline or is closed right after the call.
+- The sender sends at most 10 requests a second, so a burst of events stays inside the backend's per-device limit.
+- Failed sends are retried with backoff (1 second up to 5 minutes) on network errors, 408, 429 and 5xx, for up to 7 days. Other 4xx responses are not retried, as before.
+- Init is always sent first on a new install. `getAttributionData` and `handleDeeplink` wait up to 5 seconds for it, and `initialize` waits up to 30 seconds, as before.
+- Device details read from UIKit are read once per launch instead of on every call, so a burst of events no longer queues work on the main thread.
+- The queue is stored in Application Support, excluded from backup, and never holds the project token, which is added when each request is sent. It keeps at most 5,000 requests or 5 MB, dropping the oldest plain events first. If the queue cannot be written, requests are kept in memory for the session.
+- The SDK never wakes the app in the background. When the app moves to the background it uses the normal background time to finish sending.
+
+### Fixed
+
+- Two log lines printed in release builds. Every SDK log is now debug-only, and a test fails the build on any new release log.
+
 ## [5.2.0] - 2026-11-14
 
 ### Added
