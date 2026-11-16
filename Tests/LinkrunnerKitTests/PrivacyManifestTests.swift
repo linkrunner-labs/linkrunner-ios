@@ -76,6 +76,7 @@ final class PrivacyManifestTests: XCTestCase {
             "NSPrivacyCollectedDataTypeDeviceID",
             "NSPrivacyCollectedDataTypeUserID",
             "NSPrivacyCollectedDataTypeAdvertisingData",
+            "NSPrivacyCollectedDataTypeCoarseLocation",
             "NSPrivacyCollectedDataTypeProductInteraction",
             "NSPrivacyCollectedDataTypePurchaseHistory",
             "NSPrivacyCollectedDataTypeEmailAddress",
