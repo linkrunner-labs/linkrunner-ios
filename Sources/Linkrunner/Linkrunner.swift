@@ -157,7 +157,38 @@ public class LinkrunnerSDK: @unchecked Sendable {
     
     // Request signing configuration
     private let requestInterceptor = RequestSigningInterceptor()
-    private let baseUrl = "https://api.linkrunner.io"
+    private let baseUrl: String = {
+        #if DEBUG
+        if let override = ProcessInfo.processInfo.environment["LINKRUNNER_DEBUG_BASE_URL"], !override.isEmpty {
+            return override
+        }
+        #endif
+        return "https://api.linkrunner.io"
+    }()
+
+    /// Requests that do not return data to the caller go through a durable queue.
+    private let requestStore = EventQueueStore(fileURL: { EventQueueStore.defaultFileURL() })
+    let initGate = InitGate()
+    private var requestSender: RequestQueueSender!
+    @Synchronized private var backgroundTaskId: Int? = nil
+
+    /// Direct reads wait this long for init so the backend knows the install.
+    private static let DIRECT_CALL_INIT_WAIT_MS = 5_000
+    /// `initialize` waits up to this long for init, matching the old retry window.
+    private static let INITIALIZE_WAIT_MS = 30_000
+
+    /// Static device fields read from UIKit once per process.
+    struct StaticDeviceInfo: Sendable {
+        var model: String
+        var name: String
+        var systemVersion: String
+        var screenWidth: Double
+        var screenHeight: Double
+        var screenScale: Double
+        var idfv: String?
+        var userAgent: String
+    }
+    @Synchronized private var staticDeviceInfoTask: Task<StaticDeviceInfo, Never>? = nil
 
     
 #if canImport(Network)
@@ -192,7 +223,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
                 }
                 
                 // Update the connection type on the main object
+                let wasOffline = self?.currentConnectionType == "disconnected"
                 self?.currentConnectionType = connectionType
+                if wasOffline { self?.kickQueue(resetBackoff: true) }
             } else {
                 self?.currentConnectionType = "disconnected"
             }
@@ -205,9 +238,25 @@ public class LinkrunnerSDK: @unchecked Sendable {
     private init() {
         self.consent = LinkrunnerSDK.loadPersistedConsent()
         self.privacyMode = UserDefaults.standard.bool(forKey: LinkrunnerSDK.PRIVACY_MODE_KEY)
+        self.requestSender = RequestQueueSender(
+            store: requestStore,
+            gate: initGate,
+            transport: { [weak self] endpoint, body in
+                guard let self = self else { throw LinkrunnerError.invalidResponse }
+                return try await self.sendOnce(endpoint: endpoint, body: body)
+            },
+            tokenProvider: { [weak self] in self?.token },
+            installIdProvider: { [weak self] in await self?.getLinkRunnerInstallInstanceId() ?? "" },
+            enrich: { [weak self] body, endpoint in self?.withMetaAnonymousId(body, endpoint: endpoint) ?? body },
+            onResponse: { [weak self] kind, response in
+                guard let source = kind.skanSource else { return }
+                await self?.processSKANResponse(response, source: source)
+            }
+        )
 #if canImport(Network)
         setupNetworkMonitoring()
 #endif
+        observeAppLifecycle()
     }
     
     // MARK: - Public Methods
@@ -338,6 +387,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             // Configure request signing only when both secretKey and keyId are provided
             configureRequestSigning(secretKey: secretKey, keyId: keyId)
         }
+        kickQueue(resetBackoff: true)
         await initApiCall(token: token, source: "GENERAL", debug: debug)
     }
     
@@ -406,21 +456,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
         var dataDict: SendableDictionary = additionalData ?? [:]
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
-        
-        do {
-            let response = try await makeRequest(
-                endpoint: "/api/client/trigger",
-                body: requestData
-            )
 
-            // Process SKAN conversion values from response in background
-            await processSKANResponse(response, source: "signup")
-            
-        } catch {
-            #if DEBUG
-            print("Linkrunner: Signup failed with error: \(error)")
-            #endif
-        }
+        enqueue(.signup, body: requestData)
     }
     
     /// Set user data in Linkrunner.
@@ -451,16 +488,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
         
-        do {
-            _ = try await makeRequest(
-                endpoint: "/api/client/set-user-data",
-                body: requestData
-            )
-        } catch {
-            #if DEBUG
-            print("Linkrunner: setUserData failed with error: \(error)")
-            #endif
-        }
+        enqueue(.setUserData, body: requestData)
     }
 
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
@@ -492,16 +520,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
 
-        do {
-            _ = try await makeRequest(
-                endpoint: "/api/client/customer-user-id",
-                body: requestData
-            )
-        } catch {
-            #if DEBUG
-            print("Linkrunner: setCustomerUserId failed with error: \(error)")
-            #endif
-        }
+        enqueue(.setCustomerUserId, body: requestData)
     }
 
     /// Set additional integration data
@@ -532,24 +551,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "platform": "IOS"
         ]
         
-        do {
-            let response = try await makeRequest(
-                endpoint: "/api/client/integrations",
-                body: requestData
-            )
-            
-            guard let status = response["status"] as? Int, (status == 200 || status == 201) else {
-                let msg = response["msg"] as? String ?? "Unknown error"
-                #if DEBUG
-                print("Linkrunner: setAdditionalData failed with API error: \(msg)")
-                #endif
-                return
-            }
-        } catch {
-            #if DEBUG
-            print("Linkrunner: setAdditionalData failed with error: \(error)")
-            #endif
-        }
+        enqueue(.integrations, body: requestData)
     }
     
     /// Request App Tracking Transparency permission
@@ -591,7 +593,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
             }
 #else
             // Fallback when AppTrackingTransparency is not available
+            #if DEBUG
             print("Linkrunner: AppTrackingTransparency not available")
+            #endif
             if let completionHandler = completionHandler {
                 Task { @MainActor in
                     completionHandler(.notDetermined)
@@ -667,21 +671,10 @@ public class LinkrunnerSDK: @unchecked Sendable {
             #endif
         }
 
-        do {
-            let response = try await makeRequest(
-                endpoint: "/api/client/capture-event",
-                body: requestData
-            )
-            
-            // Process SKAN conversion values from response in background
-            await processSKANResponse(response, source: "event")
-            
+        let priority = payment == nil ? EventQueueStore.priorityLow : EventQueueStore.priorityHigh
+        if enqueue(.event, body: requestData, priority: priority) {
             #if DEBUG
-            print("Linkrunner: Tracking event", eventName, eventData ?? [:])
-            #endif
-        } catch {
-            #if DEBUG
-            print("Linkrunner: trackEvent failed with error: \(error)")
+            print("Linkrunner: Queued event", eventName)
             #endif
         }
     }
@@ -738,29 +731,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
         
-        do {
-            let response = try await makeRequest(
-                endpoint: "/api/client/capture-payment",
-                body: requestData
-            )
-            
-            // Process SKAN conversion values from response in background
-            await processSKANResponse(response, source: "payment")
-            
-            #if DEBUG
-            print("Linkrunner: Payment captured successfully ", [
-                "amount": amount,
-                "paymentId": paymentId,
-                "userId": resolvedUserId,
-                "type": type.rawValue,
-                "status": status.rawValue
-            ] as [String: Any])
-            #endif
-        } catch {
-            #if DEBUG
-            print("Linkrunner: capturePayment failed with error: \(error)")
-            #endif
-        }
+        enqueue(.capturePayment, body: requestData)
     }
     
     /// Remove a captured payment
@@ -799,23 +770,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
         dataDict["device_data"] = (await deviceData()).toDictionary()
         requestData["data"] = dataDict
         
-        do {
-            _ = try await makeRequest(
-                endpoint: "/api/client/remove-captured-payment",
-                body: requestData
-            )
-            
-            #if DEBUG
-            print("Linkrunner: Payment entry removed successfully!", [
-                "paymentId": paymentId ?? "N/A",
-                "userId": userId
-            ] as [String: Any])
-            #endif
-        } catch {
-            #if DEBUG
-            print("Linkrunner: removePayment failed with error: \(error)")
-            #endif
-        }
+        enqueue(.removePayment, body: requestData)
     }
     
     /// Update the push notification token for the current user
@@ -843,20 +798,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             "install_instance_id": await getLinkRunnerInstallInstanceId()
         ]
         
-        do {
-            _ = try await makeRequest(
-                endpoint: "/api/client/update-push-token",
-                body: requestData
-            )
-            
-            #if DEBUG
-            print("Linkrunner: Push token updated successfully")
-            #endif
-        } catch {
-            #if DEBUG
-            print("Linkrunner: setPushToken failed with error: \(error)")
-            #endif
-        }
+        enqueue(.pushToken, body: requestData)
     }
     
     /// Fetches attribution data for the current installation
@@ -875,6 +817,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
             )
         }
         
+        await waitForInitSent(timeoutMs: LinkrunnerSDK.DIRECT_CALL_INIT_WAIT_MS)
+
         let requestData: SendableDictionary = [
             "token": token,
             "platform": "IOS",
@@ -940,6 +884,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
         print("Linkrunner: handleDeeplink called.")
         #endif
         
+        await waitForInitSent(timeoutMs: LinkrunnerSDK.DIRECT_CALL_INIT_WAIT_MS)
+
         let deviceDataDict = (await deviceData()).toDictionary()
         let installInstanceId = await getLinkRunnerInstallInstanceId()
         let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
@@ -1004,22 +950,9 @@ public class LinkrunnerSDK: @unchecked Sendable {
         if let link = link {
             requestData["link"] = link
         }
-        
-        do {
-            _ = try await makeRequest(
-                endpoint: "/api/client/init",
-                body: requestData
-            )
-            
-            #if DEBUG
-            print("Linkrunner: Initialization successful")
-            #endif
-            
-        } catch {
-            #if DEBUG
-            print("Linkrunner: Init failed with error: \(error)")
-            #endif
-        }
+
+        enqueue(.initialize, body: requestData)
+        await initGate.waitUntilOpen(installId: installInstanceId, timeoutMs: LinkrunnerSDK.INITIALIZE_WAIT_MS)
     }
     
     /// Resolve the Google ODM value for this install, if one is available.
@@ -1309,7 +1242,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "5.2.0" // Swift package version
+        return "5.3.0" // Swift package version
     }
     
     private func getAppVersion() -> String {
@@ -1322,159 +1255,156 @@ public class LinkrunnerSDK: @unchecked Sendable {
 @available(iOS 15.0, *)
 extension LinkrunnerSDK {
     func deviceData() async -> DeviceData {
-        // Create a Sendable wrapper using Task isolation to convert to a Sendable result
-        return await Task { () -> DeviceData in
 #if canImport(UIKit)
-            // Device info
-            let currentDevice = await UIDevice.current
-            let deviceModel = await currentDevice.model
-            let privacyMode = self.privacyMode
-            // The user-assigned device name can contain a child's name; the generic model replaces it.
-            let deviceName: String
-            if privacyMode {
-                deviceName = deviceModel
-            } else {
-                deviceName = await currentDevice.name
-            }
-            let systemVersion = await currentDevice.systemVersion
-            
-            // App info
-            let bundle = Bundle.main
-            let bundleId = bundle.bundleIdentifier
-            let appVersion = bundle.infoDictionary?["CFBundleShortVersionString"] as? String
-            let buildNumber = bundle.infoDictionary?["CFBundleVersion"] as? String
-            
-            // Network info
-            let connectivity = getNetworkType()
-            
-            // Screen info
-            let screen = await UIScreen.main
-            let screenBounds = await screen.bounds
-            let screenScale = await screen.scale
-            let displayData = DeviceData.DisplayData(
-                width: screenBounds.width,
-                height: screenBounds.height,
-                scale: screenScale
-            )
-            
-            // Variable for IDFA
-            var idfa: String? = nil
-            
-            // Advertising ID - only collect if disableIdfa is false and privacy mode is off.
-            // Privacy mode also guarantees the ATT prompt is never requested here.
-            if !self.disableIdfa && !privacyMode {
+        let info = await staticDeviceInfo()
+        let privacyMode = self.privacyMode
+        // The user-assigned device name can contain a child's name; the generic model replaces it.
+        let deviceName = privacyMode ? info.model : info.name
+
+        let bundle = Bundle.main
+        let bundleId = bundle.bundleIdentifier
+        let appVersion = bundle.infoDictionary?["CFBundleShortVersionString"] as? String
+        let buildNumber = bundle.infoDictionary?["CFBundleVersion"] as? String
+
+        let connectivity = getNetworkType()
+
+        var idfa: String? = nil
+        // Advertising ID - only collect if disableIdfa is false and privacy mode is off.
+        // Privacy mode also guarantees the ATT prompt is never requested here.
+        if !self.disableIdfa && !privacyMode {
 #if canImport(AppTrackingTransparency)
-                if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
-                    // Create a continuation to make the async SDK call work in our async function
-                    await withCheckedContinuation { continuation in
-                        DispatchQueue.main.async {
-                            ATTrackingManager.requestTrackingAuthorization { _ in
-                                continuation.resume()
-                            }
+            if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
+                await withCheckedContinuation { continuation in
+                    DispatchQueue.main.async {
+                        ATTrackingManager.requestTrackingAuthorization { _ in
+                            continuation.resume()
                         }
                     }
                 }
-                
-                // Check the status after potential request
-                if ATTrackingManager.trackingAuthorizationStatus == .authorized {
+            }
+            if ATTrackingManager.trackingAuthorizationStatus == .authorized {
 #if canImport(AdSupport)
-                    idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
-#endif
-                }
+                idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
 #endif
             }
-            
-            // Device ID (for IDFV)
-            var idfv: String? = nil
-            if !privacyMode {
-                idfv = await currentDevice.identifierForVendor?.uuidString
+#endif
+        }
+
+        var idfv: String? = nil
+        if !privacyMode {
+            idfv = info.idfv
+            if idfv == nil {
+                idfv = await refreshIdfv()
             }
-            
-            // Locale info
-            let locale = Locale.current
-            let localeIdentifier = locale.identifier
-            let languageCode = locale.languageCode
-            let regionCode = locale.regionCode
-            
-            // Timezone
-            let timezone = TimeZone.current
-            let timezoneIdentifier = timezone.identifier
-            let timezoneOffset = timezone.secondsFromGMT() / 60
-            
-            // User agent
-            let userAgent = await getUserAgent()
-            
-            // Install instance ID
-            let installInstanceId = await getLinkRunnerInstallInstanceId()
-            
-            // Attribution token from AdServices
-            let attributionToken = await getAttributionToken()
-            
-            return DeviceData(
-                device: deviceModel,
-                deviceModelIdentifier: self.deviceModelIdentifier,
-                deviceName: deviceName,
-                systemVersion: systemVersion,
-                brand: "Apple",
-                manufacturer: "Apple",
-                bundleId: bundleId,
-                appVersion: appVersion,
-                buildNumber: buildNumber,
-                connectivity: connectivity,
-                deviceDisplay: displayData,
-                idfa: idfa,
-                idfv: idfv,
-                locale: localeIdentifier,
-                language: languageCode,
-                country: regionCode,
-                timezone: timezoneIdentifier,
-                timezoneOffset: timezoneOffset,
-                userAgent: userAgent,
-                installInstanceId: installInstanceId,
-                adservicesAttributionToken: attributionToken,
-                odmInfo: self.privacyMode ? nil : self.odmInfo,
-                firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
-                attStatus: self.getATTStatus(),
-                consent: self.resolveConsent(),
-                privacyMode: self.privacyMode
-            )
+        }
+
+        let locale = Locale.current
+        let timezone = TimeZone.current
+
+        return DeviceData(
+            device: info.model,
+            deviceModelIdentifier: self.deviceModelIdentifier,
+            deviceName: deviceName,
+            systemVersion: info.systemVersion,
+            brand: "Apple",
+            manufacturer: "Apple",
+            bundleId: bundleId,
+            appVersion: appVersion,
+            buildNumber: buildNumber,
+            connectivity: connectivity,
+            deviceDisplay: DeviceData.DisplayData(width: info.screenWidth, height: info.screenHeight, scale: info.screenScale),
+            idfa: idfa,
+            idfv: idfv,
+            locale: locale.identifier,
+            language: locale.languageCode,
+            country: locale.regionCode,
+            timezone: timezone.identifier,
+            timezoneOffset: timezone.secondsFromGMT() / 60,
+            userAgent: info.userAgent,
+            installInstanceId: await getLinkRunnerInstallInstanceId(),
+            adservicesAttributionToken: await getAttributionToken(),
+            odmInfo: self.privacyMode ? nil : self.odmInfo,
+            firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
+            attStatus: self.getATTStatus(),
+            consent: self.resolveConsent(),
+            privacyMode: self.privacyMode
+        )
 #else
-            // Fallback for non-UIKit platforms
-            // Attribution token from AdServices
-            let attributionToken = await getAttributionToken()
-            
-            return DeviceData(
-                device: "Unknown",
-                deviceModelIdentifier: self.deviceModelIdentifier,
-                deviceName: "Unknown",
-                systemVersion: "Unknown",
-                brand: "Apple",
-                manufacturer: "Apple",
-                bundleId: nil,
-                appVersion: nil,
-                buildNumber: nil,
-                connectivity: "unknown",
-                deviceDisplay: DeviceData.DisplayData(width: 0, height: 0, scale: 1),
-                idfa: nil,
-                idfv: nil,
-                locale: nil,
-                language: nil,
-                country: nil,
-                timezone: nil,
-                timezoneOffset: nil,
-                userAgent: nil,
-                installInstanceId: await getLinkRunnerInstallInstanceId(),
-                adservicesAttributionToken: attributionToken,
-                odmInfo: self.privacyMode ? nil : self.odmInfo,
-                firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
-                attStatus: self.getATTStatus(),
-                consent: self.resolveConsent(),
-                privacyMode: self.privacyMode
-            )
+        return DeviceData(
+            device: "Unknown",
+            deviceModelIdentifier: self.deviceModelIdentifier,
+            deviceName: "Unknown",
+            systemVersion: "Unknown",
+            brand: "Apple",
+            manufacturer: "Apple",
+            bundleId: nil,
+            appVersion: nil,
+            buildNumber: nil,
+            connectivity: "unknown",
+            deviceDisplay: DeviceData.DisplayData(width: 0, height: 0, scale: 1),
+            idfa: nil,
+            idfv: nil,
+            locale: nil,
+            language: nil,
+            country: nil,
+            timezone: nil,
+            timezoneOffset: nil,
+            userAgent: nil,
+            installInstanceId: await getLinkRunnerInstallInstanceId(),
+            adservicesAttributionToken: await getAttributionToken(),
+            odmInfo: self.privacyMode ? nil : self.odmInfo,
+            firstOpenTimestamp: (self.appInstallTime ?? self.getAppInstallTime()).timeIntervalSince1970,
+            attStatus: self.getATTStatus(),
+            consent: self.resolveConsent(),
+            privacyMode: self.privacyMode
+        )
 #endif
-        }.value
     }
-    
+
+#if canImport(UIKit)
+    /// Concurrent callers share one main-actor read for the life of the process.
+    private func staticDeviceInfo() async -> StaticDeviceInfo {
+        let task = $staticDeviceInfoTask.withLock { current -> Task<StaticDeviceInfo, Never> in
+            if let existing = current { return existing }
+            let created = Task { await LinkrunnerSDK.readStaticDeviceInfo() }
+            current = created
+            return created
+        }
+        return await task.value
+    }
+
+    @MainActor
+    private static func readStaticDeviceInfo() -> StaticDeviceInfo {
+        let device = UIDevice.current
+        let screen = UIScreen.main
+        let appInfo = Bundle.main.infoDictionary
+        let appVersion = appInfo?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        let buildNumber = appInfo?["CFBundleVersion"] as? String ?? "Unknown"
+        return StaticDeviceInfo(
+            model: device.model,
+            name: device.name,
+            systemVersion: device.systemVersion,
+            screenWidth: screen.bounds.width,
+            screenHeight: screen.bounds.height,
+            screenScale: screen.scale,
+            idfv: device.identifierForVendor?.uuidString,
+            userAgent: "Linkrunner-iOS/\(appVersion) (\(device.model); iOS \(device.systemVersion); Build/\(buildNumber))"
+        )
+    }
+
+    /// IDFV can be nil until first unlock after a restart, so a nil value is re-read.
+    private func refreshIdfv() async -> String? {
+        guard let idfv = await MainActor.run(body: { UIDevice.current.identifierForVendor?.uuidString }) else {
+            return nil
+        }
+        var info = await staticDeviceInfo()
+        info.idfv = idfv
+        let updated = info
+        staticDeviceInfoTask = Task { updated }
+        return idfv
+    }
+#endif
+
     private func getNetworkType() -> String {
 #if canImport(Network)
         // Using a static property to keep track of the network type
@@ -1491,21 +1421,6 @@ extension LinkrunnerSDK {
 #else
         // Fallback for platforms where Network framework is not available
         return "unknown"
-#endif
-    }
-    
-    private func getUserAgent() async -> String {
-#if canImport(UIKit)
-        let device = await UIDevice.current
-        let appInfo = Bundle.main.infoDictionary
-        let appVersion = appInfo?["CFBundleShortVersionString"] as? String ?? "Unknown"
-        let buildNumber = appInfo?["CFBundleVersion"] as? String ?? "Unknown"
-        let deviceModel = await device.model
-        let systemVersion = await device.systemVersion
-        
-        return "Linkrunner-iOS/\(appVersion) (\(deviceModel); iOS \(systemVersion); Build/\(buildNumber))"
-#else
-        return "Linkrunner-iOS/Unknown"
 #endif
     }
 }
@@ -1603,7 +1518,6 @@ extension LinkrunnerSDK {
     }
     
     private func getTimeSinceAppInstall() -> TimeInterval {
-        print("Linkrunner: Getting time since app install")
         guard let installTime = appInstallTime else {
             return 0
         }
@@ -1657,5 +1571,123 @@ extension LinkrunnerSDK {
             }
             #endif
         }
+    }
+}
+
+// MARK: - Request Queue
+
+@available(iOS 15.0, *)
+extension LinkrunnerSDK {
+    func kickQueue(resetBackoff: Bool = false) {
+        guard let sender = requestSender else { return }
+        Task { await sender.kick(resetBackoff: resetBackoff) }
+    }
+
+    /// Saves the request without its token and returns once it is on disk.
+    @discardableResult
+    func enqueue(_ kind: QueuedRequestKind, body: SendableDictionary, priority: Int = EventQueueStore.priorityHigh) -> Bool {
+        guard let payload = LinkrunnerSDK.queuePayload(for: body) else {
+            #if DEBUG
+            print("Linkrunner: \(kind.rawValue) not queued - body is not valid JSON")
+            #endif
+            return false
+        }
+        requestStore.insert(kind: kind.rawValue, payload: payload, priority: priority,
+                            now: Int64(Date().timeIntervalSince1970 * 1000))
+        kickQueue()
+        return true
+    }
+
+    /// JSON for a queued row; the token is added again at send time.
+    static func queuePayload(for body: SendableDictionary) -> String? {
+        var stored = body
+        stored.removeValue(forKey: "token")
+        guard JSONSerialization.isValidJSONObject(stored),
+              let data = try? JSONSerialization.data(withJSONObject: stored) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// One attempt with no retry; the queue owns retries.
+    @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
+    func sendOnce(endpoint: String, body: SendableDictionary) async throws -> (Int, SendableDictionary?) {
+        guard let url = URL(string: baseUrl + endpoint) else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await requestInterceptor.signAndSendRequest(request)
+        guard let http = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? SendableDictionary
+        return (http.statusCode, json)
+    }
+
+    func waitForInitSent(timeoutMs: Int) async {
+        let installId = await getLinkRunnerInstallInstanceId()
+        await initGate.waitUntilOpen(installId: installId, timeoutMs: timeoutMs)
+    }
+
+    func observeAppLifecycle() {
+        guard let sender = requestSender else { return }
+        let onIdle: @Sendable () -> Void = { [weak self] in self?.endBackgroundTask() }
+        Task { await sender.setIdleHandler(onIdle) }
+#if canImport(UIKit)
+        let center = NotificationCenter.default
+        center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.kickQueue(resetBackoff: true)
+        }
+        center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.kickQueue()
+        }
+        center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.beginBackgroundTask()
+            self?.kickQueue(resetBackoff: true)
+        }
+#endif
+    }
+
+#if canImport(UIKit)
+    /// Looked up at runtime so the SDK stays usable from app extensions.
+    private static func sharedApplication() -> UIApplication? {
+        let selector = NSSelectorFromString("sharedApplication")
+        guard UIApplication.responds(to: selector) else { return nil }
+        return UIApplication.perform(selector)?.takeUnretainedValue() as? UIApplication
+    }
+#endif
+
+    private func beginBackgroundTask() {
+#if canImport(UIKit)
+        guard let app = Self.sharedApplication() else { return }
+        let started = $backgroundTaskId.withLock { current -> Bool in
+            guard current == nil else { return false }
+            current = -1
+            return true
+        }
+        guard started else { return }
+        let id = app.beginBackgroundTask(withName: "LinkrunnerQueueFlush") { [weak self] in
+            self?.endBackgroundTask()
+        }
+        if id == .invalid {
+            backgroundTaskId = nil
+        } else {
+            backgroundTaskId = id.rawValue
+        }
+#endif
+    }
+
+    private func endBackgroundTask() {
+#if canImport(UIKit)
+        let id = $backgroundTaskId.withLock { current -> Int? in
+            guard let value = current, value >= 0 else { return nil }
+            current = nil
+            return value
+        }
+        guard let id = id, let app = Self.sharedApplication() else { return }
+        app.endBackgroundTask(UIBackgroundTaskIdentifier(rawValue: id))
+#endif
     }
 }
