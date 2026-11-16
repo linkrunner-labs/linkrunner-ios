@@ -35,6 +35,7 @@ let package = Package(
             dependencies: [],
             path: "Sources/Linkrunner",
             exclude: ["include"],
+            resources: [.copy("PrivacyInfo.xcprivacy")],
             cSettings: [
                 .define("SWIFT_PACKAGE")
             ],
