@@ -340,6 +340,37 @@ final class RequestQueueSenderTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 5)
     }
 
+    func testKickWithResetDuringAFailingSendStillWakesTheBackoff() async {
+        markInitSent()
+        enqueue(.event, ["event_name": "a"])
+        let calls = Counter()
+        let transport: RequestQueueSender.Transport = { _, _ in
+            if await calls.next() == 1 {
+                try await Task.sleep(nanoseconds: 500_000_000)
+                throw URLError(.notConnectedToInternet)
+            }
+            return (200, [:])
+        }
+        let sender = RequestQueueSender(
+            store: store,
+            gate: InitGate(defaults: defaults),
+            transport: transport,
+            tokenProvider: { "tok_123" },
+            installIdProvider: { "install_1" },
+            config: .init(minIntervalMs: 0, backoffBaseMs: 60_000, backoffMaxMs: 60_000, initWaitMs: 300, gatePollMs: 20)
+        )
+
+        let start = Date()
+        await sender.kick()
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        await sender.kick(resetBackoff: true)
+        await sender.waitUntilIdle()
+
+        let total = await calls.value
+        XCTAssertEqual(total, 2)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 5)
+    }
+
     func testRetryClassification() {
         XCTAssertEqual(RequestQueueSender.classify(status: 200), .sent)
         XCTAssertEqual(RequestQueueSender.classify(status: 201), .sent)
@@ -360,4 +391,12 @@ final class ResponseLog: @unchecked Sendable {
     private var _kinds: [QueuedRequestKind] = []
     var kinds: [QueuedRequestKind] { lock.lock(); defer { lock.unlock() }; return _kinds }
     func append(_ kind: QueuedRequestKind) { lock.lock(); _kinds.append(kind); lock.unlock() }
+}
+
+private actor Counter {
+    private(set) var value = 0
+    func next() -> Int {
+        value += 1
+        return value
+    }
 }

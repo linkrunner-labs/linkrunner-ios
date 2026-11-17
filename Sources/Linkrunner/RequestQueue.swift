@@ -113,6 +113,8 @@ actor RequestQueueSender {
 
     private var loopTask: Task<Void, Never>?
     private var sleepTask: Task<Void, Never>?
+    private var wakePending = false
+    private var resetPending = false
     private var lastSendAt: Int64 = 0
     private var gateWaitStartedAt: Int64?
     private var idleHandler: (@Sendable () -> Void)?
@@ -148,10 +150,15 @@ actor RequestQueueSender {
 
     /// Starts the loop, or wakes it from a wait. `resetBackoff` makes every row due now.
     func kick(resetBackoff: Bool = false) {
-        if resetBackoff { store.resetBackoff(now: clock()) }
+        if resetBackoff {
+            store.resetBackoff(now: clock())
+            resetPending = true
+        }
         if loopTask == nil {
             loopTask = Task { await self.run() }
         } else {
+            // A kick during a send must still apply after that send schedules its retry.
+            wakePending = true
             sleepTask?.cancel()
         }
     }
@@ -164,6 +171,10 @@ actor RequestQueueSender {
     private func run() async {
         store.purgeExpired(now: clock())
         while !Task.isCancelled {
+            if resetPending {
+                resetPending = false
+                store.resetBackoff(now: clock())
+            }
             guard tokenProvider() != nil else { break }
             let installId = await installIdProvider()
             guard let row = nextRow(installId: installId) else {
@@ -282,9 +293,14 @@ actor RequestQueueSender {
 
     private func sleep(ms: Int64) async {
         guard ms > 0 else { return }
+        if wakePending {
+            wakePending = false
+            return
+        }
         let task = Task<Void, Never> { try? await Task.sleep(nanoseconds: UInt64(ms) * 1_000_000) }
         sleepTask = task
         await task.value
         sleepTask = nil
+        wakePending = false
     }
 }
