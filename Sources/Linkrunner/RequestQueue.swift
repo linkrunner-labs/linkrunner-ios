@@ -191,7 +191,8 @@ actor RequestQueueSender {
             }
             let sinceLast = now - lastSendAt
             if sinceLast < config.minIntervalMs {
-                await sleep(ms: config.minIntervalMs - sinceLast)
+                // Pacing is short and ignores kicks, so a burst of calls cannot skip it.
+                try? await Task.sleep(nanoseconds: UInt64(config.minIntervalMs - sinceLast) * 1_000_000)
                 continue
             }
             await send(row, installId: installId)
