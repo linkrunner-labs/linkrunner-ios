@@ -129,6 +129,15 @@ final class EventQueueStoreTests: XCTestCase {
         XCTAssertEqual(store.first()?.payload, "{\"l\":3}")
     }
 
+    func testMemoryFallbackIsBoundedByBytes() {
+        let store = EventQueueStore(fileURL: nil)
+        let big = String(repeating: "x", count: 200 * 1024)
+        for i in 0..<10 {
+            store.insert(kind: "event", payload: big, priority: 1, now: Int64(i))
+        }
+        XCTAssertEqual(store.count(), 5)
+    }
+
     func testNilPathKeepsRowsInMemory() {
         let store = EventQueueStore(fileURL: nil)
         store.insert(kind: "event", payload: "{}", priority: 1, now: 1)

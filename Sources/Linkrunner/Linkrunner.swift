@@ -1592,6 +1592,12 @@ extension LinkrunnerSDK {
             #endif
             return false
         }
+        guard payload.utf8.count <= EventQueueStore.maxPayloadBytes else {
+            #if DEBUG
+            print("Linkrunner: \(kind.rawValue) not queued - request is larger than 256 KB")
+            #endif
+            return false
+        }
         requestStore.insert(kind: kind.rawValue, payload: payload, priority: priority,
                             now: Int64(Date().timeIntervalSince1970 * 1000))
         kickQueue()

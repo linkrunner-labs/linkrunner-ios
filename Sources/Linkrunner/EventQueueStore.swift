@@ -17,6 +17,8 @@ final class EventQueueStore: @unchecked Sendable {
     static let maxRows = 5_000
     static let maxBytes = 5 * 1024 * 1024
     static let maxMemoryRows = 500
+    static let maxMemoryBytes = 1024 * 1024
+    static let maxPayloadBytes = 256 * 1024
     static let ttlMs: Int64 = 7 * 24 * 60 * 60 * 1000
 
     static let priorityHigh = 0
@@ -249,12 +251,11 @@ final class EventQueueStore: @unchecked Sendable {
     }
 
     private func insertInMemory(kind: String, payload: String, priority: Int, now: Int64) {
-        if memory.count >= memoryRowLimit {
-            if let i = memory.firstIndex(where: { $0.priority == Self.priorityLow }) {
-                memory.remove(at: i)
-            } else {
-                memory.removeFirst()
-            }
+        var bytes = memory.reduce(0) { $0 + $1.payload.utf8.count } + payload.utf8.count
+        while !memory.isEmpty && (memory.count >= memoryRowLimit || bytes > Self.maxMemoryBytes) {
+            let i = memory.firstIndex(where: { $0.priority == Self.priorityLow }) ?? 0
+            bytes -= memory[i].payload.utf8.count
+            memory.remove(at: i)
         }
         memory.append(QueuedRequest(id: nextMemoryId, kind: kind, payload: payload, createdAt: now,
                                     attempts: 0, nextAttemptAt: now, priority: priority))

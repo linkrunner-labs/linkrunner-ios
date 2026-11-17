@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Failed sends are retried with backoff (1 second up to 5 minutes) on network errors, 408, 429 and 5xx, for up to 7 days. Other 4xx responses are not retried, as before.
 - Init is always sent first on a new install. `getAttributionData` and `handleDeeplink` wait up to 5 seconds for it, and `initialize` waits up to 30 seconds, as before.
 - Device details read from UIKit are read once per launch instead of on every call, so a burst of events no longer queues work on the main thread.
-- The queue is stored in Application Support, excluded from backup, and never holds the project token, which is added when each request is sent. It keeps at most 5,000 requests or 5 MB, dropping the oldest plain events first. If the queue cannot be written, requests are kept in memory for the session.
+- The queue is stored in Application Support, excluded from backup, and never holds the project token, which is added when each request is sent. It keeps at most 5,000 requests or 5 MB, dropping the oldest plain events first. If the queue cannot be written, requests are kept in memory for the session, up to 500 requests or 1 MB. A single request larger than 256 KB is not queued.
 - The SDK never wakes the app in the background. When the app moves to the background it uses the normal background time to finish sending.
 
 ### Fixed
