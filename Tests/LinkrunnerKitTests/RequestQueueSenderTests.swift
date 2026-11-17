@@ -1,7 +1,6 @@
 import XCTest
 @testable import LinkrunnerKit
 
-/// Answers SDK requests from a per-test script and records what was sent.
 final class QueueStubURLProtocol: URLProtocol {
     struct Sent {
         let path: String

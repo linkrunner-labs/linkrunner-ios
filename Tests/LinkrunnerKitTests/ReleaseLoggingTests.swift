@@ -1,6 +1,5 @@
 import XCTest
 
-/// Release builds must print nothing: every SDK print sits inside `#if DEBUG`.
 final class ReleaseLoggingTests: XCTestCase {
 
     func testNoPrintOutsideDebugBlocks() throws {

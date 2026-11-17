@@ -156,7 +156,7 @@ actor RequestQueueSender {
         }
     }
 
-    /// Resolves when the loop has stopped. For tests.
+    /// Resolves when the loop has stopped.
     func waitUntilIdle() async {
         while let task = loopTask { await task.value }
     }

@@ -1,8 +1,6 @@
 import XCTest
 @testable import LinkrunnerKit
 
-/// Two-phase run against a local mock: queue a burst and kill the process, then relaunch and drain.
-/// Skipped unless LR_E2E_PHASE and LINKRUNNER_DEBUG_BASE_URL are set.
 final class QueueEndToEndTests: XCTestCase {
 
     private var phase: String? { ProcessInfo.processInfo.environment["LR_E2E_PHASE"] }
