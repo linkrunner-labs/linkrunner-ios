@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'LinkrunnerKit'
-  s.version          = '5.2.0'
+  s.version          = '5.3.0'
   s.summary          = 'Linkrunner MMP SDK for iOS: install attribution, deferred deep linking, in-app events, revenue and SKAN.'
   s.description      = <<-DESC
     Native Swift SDK for Linkrunner, the mobile measurement partner (MMP): install attribution, deferred deep linking, in-app event and revenue tracking, and SKAdNetwork conversion values.
@@ -13,6 +13,7 @@ Pod::Spec.new do |s|
   s.source           = { :git => 'https://github.com/linkrunner-labs/linkrunner-ios.git', :tag => s.version.to_s }
   s.source_files     = 'Sources/Linkrunner/**/*.swift'
   s.frameworks       = 'Foundation', 'UIKit', 'Network'
+  s.libraries        = 'sqlite3'
   s.module_name      = 'LinkrunnerKit'
 
   # No dependency on GoogleAdsOnDeviceConversion: it is detected at runtime (see
