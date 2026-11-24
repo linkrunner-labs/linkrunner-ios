@@ -1242,7 +1242,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "5.3.0" // Swift package version
+        return "5.3.1" // Swift package version
     }
     
     private func getAppVersion() -> String {
