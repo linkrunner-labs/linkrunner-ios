@@ -172,8 +172,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
     private var requestSender: RequestQueueSender!
     @Synchronized private var backgroundTaskId: Int? = nil
 
-    /// Direct reads wait this long for init so the backend knows the install.
-    private static let DIRECT_CALL_INIT_WAIT_MS = 5_000
     /// `initialize` waits up to this long for init, matching the old retry window.
     private static let INITIALIZE_WAIT_MS = 30_000
 
@@ -817,8 +815,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
             )
         }
         
-        await waitForInitSent(timeoutMs: LinkrunnerSDK.DIRECT_CALL_INIT_WAIT_MS)
-
         let requestData: SendableDictionary = [
             "token": token,
             "platform": "IOS",
@@ -884,8 +880,6 @@ public class LinkrunnerSDK: @unchecked Sendable {
         print("Linkrunner: handleDeeplink called.")
         #endif
         
-        await waitForInitSent(timeoutMs: LinkrunnerSDK.DIRECT_CALL_INIT_WAIT_MS)
-
         let deviceDataDict = (await deviceData()).toDictionary()
         let installInstanceId = await getLinkRunnerInstallInstanceId()
         let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
@@ -1242,7 +1236,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     }
     
     private func getPackageVersion() -> String {
-        return "5.3.1" // Swift package version
+        return "5.3.2" // Swift package version
     }
     
     private func getAppVersion() -> String {
@@ -1630,11 +1624,6 @@ extension LinkrunnerSDK {
         }
         let json = (try? JSONSerialization.jsonObject(with: data)) as? SendableDictionary
         return (http.statusCode, json)
-    }
-
-    func waitForInitSent(timeoutMs: Int) async {
-        let installId = await getLinkRunnerInstallInstanceId()
-        await initGate.waitUntilOpen(installId: installId, timeoutMs: timeoutMs)
     }
 
     func observeAppLifecycle() {

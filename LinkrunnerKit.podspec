@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'LinkrunnerKit'
-  s.version          = '5.3.1'
+  s.version          = '5.3.2'
   s.summary          = 'Linkrunner MMP SDK for iOS: install attribution, deferred deep linking, in-app events, revenue and SKAN.'
   s.description      = <<-DESC
     Native Swift SDK for Linkrunner, the mobile measurement partner (MMP): install attribution, deferred deep linking, in-app event and revenue tracking, and SKAdNetwork conversion values.
