@@ -12,4 +12,14 @@ final class AwaitTokenTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(elapsed, 0.3)
         XCTAssertLessThan(elapsed, 1.5)
     }
+
+    func testReturnsPromptlyWhenTheCallingTaskIsCancelled() async {
+        let start = Date()
+        let task = Task { await LinkrunnerSDK.shared.awaitToken(timeoutMs: 5_000) }
+        task.cancel()
+        let token = await task.value
+
+        XCTAssertNil(token)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.0)
+    }
 }

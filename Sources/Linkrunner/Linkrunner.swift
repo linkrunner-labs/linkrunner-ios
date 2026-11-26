@@ -1633,7 +1633,7 @@ extension LinkrunnerSDK {
         if let token = self.token { return token }
         let deadline = Date().addingTimeInterval(Double(timeoutMs ?? LinkrunnerSDK.PRE_INIT_WAIT_MS) / 1000)
         while Date() < deadline {
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return self.token }
             if let token = self.token { return token }
         }
         return nil
