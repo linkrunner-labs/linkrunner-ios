@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `getAttributionData` and `handleDeeplink` no longer wait up to 5 seconds for init to be sent on a new install. They send their request straight away, so attribution and deferred deeplinks arrive sooner on the first launch. The backend answers both before init arrives.
+- `getAttributionData` and `handleDeeplink` called before `initialize` now wait up to 10 seconds for it instead of failing at once, the same as on Android.
 - `signup`, `setUserData`, `setCustomerUserId`, events and payments still wait for init, as before.
 
 ## [5.3.1] - 2026-11-24

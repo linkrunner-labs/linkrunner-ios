@@ -174,6 +174,8 @@ public class LinkrunnerSDK: @unchecked Sendable {
 
     /// `initialize` waits up to this long for init, matching the old retry window.
     private static let INITIALIZE_WAIT_MS = 30_000
+    /// Direct reads made before `initialize` hold this long for it to set the token.
+    private static let PRE_INIT_WAIT_MS = 10_000
 
     /// Static device fields read from UIKit once per process.
     struct StaticDeviceInfo: Sendable {
@@ -804,7 +806,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
     /// to ensure backward compatibility we return empty LRAttributionDataResponse on error
     @available(iOS 15.0, macOS 12.0, watchOS 8.0, tvOS 15.0, *)
     public func getAttributionData() async -> LRAttributionDataResponse {
-        guard let token = self.token else {
+        guard let token = await awaitToken() else {
             #if DEBUG
             print("GetAttributionData: SDK not initialized")
             #endif
@@ -869,7 +871,7 @@ public class LinkrunnerSDK: @unchecked Sendable {
             return LRDeeplinkResponse(deeplink: nil, isLinkrunner: false)
         }
         
-        guard let token = self.token else {
+        guard let token = await awaitToken() else {
             #if DEBUG
             print("Linkrunner: handleDeeplink failed - SDK not initialized. Call initialize() first.")
             #endif
@@ -1624,6 +1626,17 @@ extension LinkrunnerSDK {
         }
         let json = (try? JSONSerialization.jsonObject(with: data)) as? SendableDictionary
         return (http.statusCode, json)
+    }
+
+    /// Returns the token, holding a call made before `initialize` until it is set.
+    func awaitToken(timeoutMs: Int? = nil) async -> String? {
+        if let token = self.token { return token }
+        let deadline = Date().addingTimeInterval(Double(timeoutMs ?? LinkrunnerSDK.PRE_INIT_WAIT_MS) / 1000)
+        while Date() < deadline {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            if let token = self.token { return token }
+        }
+        return nil
     }
 
     func observeAppLifecycle() {
